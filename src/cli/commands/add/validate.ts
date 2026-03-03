@@ -7,6 +7,7 @@ import {
   SDKFrameworkSchema,
   TargetLanguageSchema,
   getSupportedModelProviders,
+  matchEnumValue,
 } from '../../../schema';
 import { getExistingGateways } from '../../operations/mcp/create-mcp';
 import type {
@@ -58,6 +59,19 @@ async function validateCredentialExists(credentialName: string): Promise<Validat
 
 // Agent validation
 export function validateAddAgentOptions(options: AddAgentOptions): ValidationResult {
+  // Normalize enum flag values (case-insensitive matching)
+  if (options.framework)
+    options.framework =
+      (matchEnumValue(SDKFrameworkSchema, options.framework) as typeof options.framework) ?? options.framework;
+  if (options.modelProvider)
+    options.modelProvider =
+      (matchEnumValue(ModelProviderSchema, options.modelProvider) as typeof options.modelProvider) ??
+      options.modelProvider;
+  if (options.language)
+    options.language =
+      (matchEnumValue(TargetLanguageSchema, options.language) as typeof options.language) ?? options.language;
+  if (options.build) options.build = matchEnumValue(BuildTypeSchema, options.build) ?? options.build;
+
   if (!options.name) {
     return { valid: false, error: '--name is required' };
   }
@@ -197,6 +211,11 @@ export function validateAddGatewayOptions(options: AddGatewayOptions): Validatio
 
 // Gateway Target validation
 export async function validateAddGatewayTargetOptions(options: AddGatewayTargetOptions): Promise<ValidationResult> {
+  // Normalize enum flag values (case-insensitive matching)
+  if (options.language)
+    options.language =
+      (matchEnumValue(TargetLanguageSchema, options.language) as typeof options.language) ?? options.language;
+
   if (!options.name) {
     return { valid: false, error: '--name is required' };
   }
