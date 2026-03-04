@@ -1,3 +1,4 @@
+import { buildTraceConsoleUrl } from '../../../operations/traces';
 import { GradientText, LogLink, Panel, Screen, SelectList, TextInput } from '../../components';
 import { useInvokeFlow } from './useInvokeFlow';
 import { Box, Text, useInput, useStdout } from 'ink';
@@ -268,6 +269,15 @@ export function InvokeScreen({
   }
 
   const agent = config.agents[selectedAgent];
+  const traceUrl =
+    mode !== 'select-agent' && agent
+      ? buildTraceConsoleUrl({
+          region: config.target.region,
+          accountId: config.target.account,
+          runtimeId: agent.state.runtimeId,
+          agentName: agent.name,
+        })
+      : undefined;
   const agentItems = config.agents.map((a, i) => ({
     id: String(i),
     title: a.name,
@@ -321,6 +331,11 @@ export function InvokeScreen({
         </Box>
       )}
       {logFilePath && <LogLink filePath={logFilePath} />}
+      {traceUrl && (
+        <Text color="gray">
+          Traces: <Text color="cyan">{traceUrl}</Text>
+        </Text>
+      )}
     </Box>
   );
 
