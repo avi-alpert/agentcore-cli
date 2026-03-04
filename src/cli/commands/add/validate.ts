@@ -224,8 +224,8 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
     return { valid: false, error: 'Invalid type. Valid options: mcpServer, lambda' };
   }
 
-  if (options.source && options.source !== 'existing-endpoint' && options.source !== 'create-new') {
-    return { valid: false, error: 'Invalid source. Valid options: existing-endpoint, create-new' };
+  if (options.source && options.source !== 'existing-endpoint') {
+    return { valid: false, error: "Only 'existing-endpoint' source is currently supported" };
   }
 
   // Gateway is required — a gateway target must be attached to a gateway
@@ -252,38 +252,10 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
     };
   }
 
-  if (options.source === 'existing-endpoint') {
-    if (options.host) {
-      return { valid: false, error: '--host is not applicable for existing endpoint targets' };
-    }
-    if (!options.endpoint) {
-      return { valid: false, error: '--endpoint is required when source is existing-endpoint' };
-    }
+  // Default to existing-endpoint (only supported source for now)
+  options.source ??= 'existing-endpoint';
 
-    try {
-      const url = new URL(options.endpoint);
-      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
-        return { valid: false, error: 'Endpoint must use http:// or https:// protocol' };
-      }
-    } catch {
-      return { valid: false, error: 'Endpoint must be a valid URL (e.g. https://example.com/mcp)' };
-    }
-
-    // Populate defaults for fields skipped by external endpoint flow
-    options.language ??= 'Other';
-
-    return { valid: true };
-  }
-
-  if (!options.language) {
-    return { valid: false, error: '--language is required' };
-  }
-
-  if (options.language !== 'Python' && options.language !== 'TypeScript' && options.language !== 'Other') {
-    return { valid: false, error: 'Invalid language. Valid options: Python, TypeScript, Other' };
-  }
-
-  // Validate outbound auth configuration
+  // Validate outbound auth configuration (applies to all source types)
   if (options.outboundAuthType && options.outboundAuthType !== 'NONE') {
     const hasInlineOAuth = !!(options.oauthClientId ?? options.oauthClientSecret ?? options.oauthDiscoveryUrl);
 
@@ -327,6 +299,37 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
         return credentialValidation;
       }
     }
+  }
+
+  if (options.source === 'existing-endpoint') {
+    if (options.host) {
+      return { valid: false, error: '--host is not applicable for existing endpoint targets' };
+    }
+    if (!options.endpoint) {
+      return { valid: false, error: '--endpoint is required when source is existing-endpoint' };
+    }
+
+    try {
+      const url = new URL(options.endpoint);
+      if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+        return { valid: false, error: 'Endpoint must use http:// or https:// protocol' };
+      }
+    } catch {
+      return { valid: false, error: 'Endpoint must be a valid URL (e.g. https://example.com/mcp)' };
+    }
+
+    // Populate defaults for fields skipped by external endpoint flow
+    options.language ??= 'Other';
+
+    return { valid: true };
+  }
+
+  if (!options.language) {
+    return { valid: false, error: '--language is required' };
+  }
+
+  if (options.language !== 'Python' && options.language !== 'TypeScript' && options.language !== 'Other') {
+    return { valid: false, error: 'Invalid language. Valid options: Python, TypeScript, Other' };
   }
 
   return { valid: true };
