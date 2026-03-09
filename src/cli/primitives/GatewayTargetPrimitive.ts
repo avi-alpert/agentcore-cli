@@ -3,6 +3,7 @@ import type {
   AgentCoreCliMcpDefs,
   AgentCoreGatewayTarget,
   AgentCoreMcpSpec,
+  ApiGatewayHttpMethod,
   DirectoryPath,
   FilePath,
 } from '../../schema';
@@ -13,7 +14,7 @@ import { getErrorMessage } from '../errors';
 import type { RemovableGatewayTarget } from '../operations/remove/remove-gateway-target';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
 import { getTemplateToolDefinitions, renderGatewayTargetTemplate } from '../templates/GatewayTargetRenderer';
-import type { AddGatewayTargetConfig } from '../tui/screens/mcp/types';
+import type { ApiGatewayTargetConfig, GatewayTargetWizardState, McpServerTargetConfig } from '../tui/screens/mcp/types';
 import { DEFAULT_HANDLER, DEFAULT_NODE_VERSION, DEFAULT_PYTHON_VERSION } from '../tui/screens/mcp/types';
 import { BasePrimitive } from './BasePrimitive';
 import { SOURCE_CODE_NOTE } from './constants';
@@ -279,26 +280,19 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
 
           // Handle API Gateway targets (no code generation)
           if (cliOptions.type === 'apiGateway') {
-            const config: AddGatewayTargetConfig = {
-              name: cliOptions.name!,
-              description: cliOptions.description ?? `API Gateway target for ${cliOptions.name!}`,
-              sourcePath: '',
-              language: 'Other',
-              host: 'AgentCoreRuntime',
+            const config: ApiGatewayTargetConfig = {
               targetType: 'apiGateway',
-              toolDefinition: {
-                name: cliOptions.name!,
-                description: cliOptions.description ?? `API Gateway target for ${cliOptions.name!}`,
-                inputSchema: { type: 'object' },
-              },
-              gateway: cliOptions.gateway,
-              restApiId: cliOptions.restApiId,
-              stage: cliOptions.stage,
+              name: cliOptions.name!,
+              gateway: cliOptions.gateway!,
+              restApiId: cliOptions.restApiId!,
+              stage: cliOptions.stage!,
               toolFilters: cliOptions.toolFilterPath
                 ? [
                     {
                       filterPath: cliOptions.toolFilterPath,
-                      methods: cliOptions.toolFilterMethods?.split(',').map(m => m.trim()) ?? ['GET'],
+                      methods: (cliOptions.toolFilterMethods?.split(',').map(m => m.trim()) ?? [
+                        'GET',
+                      ]) as ApiGatewayHttpMethod[],
                     },
                   ]
                 : undefined,
@@ -315,20 +309,17 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
 
           // Handle MCP server targets (existing endpoint, no code generation)
           if (cliOptions.type === 'mcpServer' && cliOptions.endpoint) {
-            const config: AddGatewayTargetConfig = {
+            const config: McpServerTargetConfig = {
+              targetType: 'mcpServer',
               name: cliOptions.name!,
               description: cliOptions.description ?? `Tool for ${cliOptions.name!}`,
-              sourcePath: '',
-              language: cliOptions.language ?? 'Other',
-              host: 'AgentCoreRuntime',
-              targetType: 'mcpServer',
+              endpoint: cliOptions.endpoint,
+              gateway: cliOptions.gateway!,
               toolDefinition: {
                 name: cliOptions.name!,
                 description: cliOptions.description ?? `Tool for ${cliOptions.name!}`,
                 inputSchema: { type: 'object' },
               },
-              gateway: cliOptions.gateway,
-              endpoint: cliOptions.endpoint,
               ...(cliOptions.outboundAuthType
                 ? {
                     outboundAuth: {
@@ -448,20 +439,14 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
    * Create an external gateway target that connects to an existing MCP server endpoint.
    * Unlike `add()` which scaffolds new code, this registers an existing endpoint URL.
    */
-  async createExternalGatewayTarget(
-    config: AddGatewayTargetConfig
-  ): Promise<{ toolName: string; projectPath: string }> {
-    if (!config.endpoint) {
-      throw new Error('Endpoint URL is required for external MCP server targets.');
-    }
-
+  async createExternalGatewayTarget(config: McpServerTargetConfig): Promise<{ toolName: string; projectPath: string }> {
     const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
       ? await this.configIO.readMcpSpec()
       : { agentCoreGateways: [] };
 
     const target: AgentCoreGatewayTarget = {
       name: config.name,
-      targetType: config.targetType ?? 'mcpServer',
+      targetType: 'mcpServer',
       endpoint: config.endpoint,
       toolDefinitions: [config.toolDefinition],
       ...(config.outboundAuth && { outboundAuth: config.outboundAuth }),
@@ -494,17 +479,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
    * Create an API Gateway target that connects to an existing Amazon API Gateway REST API.
    * Unlike `add()` which scaffolds new code, this registers an existing REST API.
    */
-  async createApiGatewayTarget(config: AddGatewayTargetConfig): Promise<{ toolName: string }> {
-    if (!config.restApiId) {
-      throw new Error('REST API ID is required for API Gateway targets.');
-    }
-    if (!config.stage) {
-      throw new Error('Stage is required for API Gateway targets.');
-    }
-    if (!config.gateway) {
-      throw new Error('Gateway name is required.');
-    }
-
+  async createApiGatewayTarget(config: ApiGatewayTargetConfig): Promise<{ toolName: string }> {
     const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
       ? await this.configIO.readMcpSpec()
       : { agentCoreGateways: [] };
@@ -529,10 +504,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
         restApiId: config.restApiId,
         stage: config.stage,
         apiGatewayToolConfiguration: {
-          toolFilters: (config.toolFilters ?? [{ filterPath: '/*', methods: ['GET'] }]) as {
-            filterPath: string;
-            methods: ('GET' | 'POST' | 'PUT' | 'DELETE' | 'PATCH' | 'HEAD' | 'OPTIONS')[];
-          }[],
+          toolFilters: config.toolFilters ?? [{ filterPath: '/*', methods: ['GET'] }],
         },
       },
     };
@@ -547,7 +519,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
   // Private helpers
   // ═══════════════════════════════════════════════════════════════════
 
-  private buildGatewayTargetConfig(options: AddGatewayTargetOptions): AddGatewayTargetConfig {
+  private buildGatewayTargetConfig(options: AddGatewayTargetOptions): GatewayTargetWizardState {
     const sourcePath = `${APP_DIR}/${MCP_APP_SUBDIR}/${options.name}`;
     const description = options.description ?? `Tool for ${options.name}`;
     return {
@@ -566,16 +538,16 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
   }
 
   private async createToolFromWizard(
-    config: AddGatewayTargetConfig
+    config: GatewayTargetWizardState
   ): Promise<{ mcpDefsPath: string; toolName: string; projectPath: string }> {
-    this.validateGatewayTargetLanguage(config.language);
+    this.validateGatewayTargetLanguage(config.language!);
 
     const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
       ? await this.configIO.readMcpSpec()
       : { agentCoreGateways: [] };
 
     const toolDefs =
-      config.host === 'Lambda' ? getTemplateToolDefinitions(config.name, config.host) : [config.toolDefinition];
+      config.host === 'Lambda' ? getTemplateToolDefinitions(config.name, config.host) : [config.toolDefinition!];
 
     for (const toolDef of toolDefs) {
       ToolDefinitionSchema.parse(toolDef);
@@ -615,7 +587,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
           ? {
               host: 'Lambda',
               implementation: {
-                path: config.sourcePath,
+                path: config.sourcePath!,
                 language: config.language,
                 handler: DEFAULT_HANDLER,
               },
@@ -626,7 +598,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
           : {
               host: 'AgentCoreRuntime',
               implementation: {
-                path: config.sourcePath,
+                path: config.sourcePath!,
                 language: 'Python',
                 handler: 'server.py:main',
               },
@@ -635,7 +607,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
                 pythonVersion: DEFAULT_PYTHON_VERSION,
                 name: config.name,
                 entrypoint: 'server.py:main' as FilePath,
-                codeLocation: config.sourcePath as DirectoryPath,
+                codeLocation: config.sourcePath! as DirectoryPath,
                 networkMode: 'PUBLIC',
               },
             },
@@ -663,10 +635,10 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
     // Render gateway target project template
     const configRoot = requireConfigRoot();
     const projectRoot = dirname(configRoot);
-    const absoluteSourcePath = join(projectRoot, config.sourcePath);
+    const absoluteSourcePath = join(projectRoot, config.sourcePath!);
     await renderGatewayTargetTemplate(config.name, absoluteSourcePath, config.language, config.host);
 
-    return { mcpDefsPath, toolName: config.name, projectPath: config.sourcePath };
+    return { mcpDefsPath, toolName: config.name, projectPath: config.sourcePath! };
   }
 
   private validateGatewayTargetLanguage(language: string): asserts language is 'Python' | 'TypeScript' | 'Other' {
