@@ -3,20 +3,26 @@ import {
   AgentCoreGatewayTargetSchema,
   AgentCoreMcpRuntimeToolSchema,
   AgentCoreMcpSpecSchema,
+  ApiGatewayConfigSchema,
   CustomJwtAuthorizerConfigSchema,
   GatewayAuthorizerTypeSchema,
   GatewayTargetTypeSchema,
+  LambdaFunctionArnConfigSchema,
   McpImplLanguageSchema,
   RuntimeConfigSchema,
+  SchemaSourceSchema,
   ToolComputeConfigSchema,
   ToolImplementationBindingSchema,
 } from '../mcp.js';
 import { describe, expect, it } from 'vitest';
 
 describe('GatewayTargetTypeSchema', () => {
-  it.each(['lambda', 'mcpServer', 'openApiSchema', 'smithyModel'])('accepts "%s"', type => {
-    expect(GatewayTargetTypeSchema.safeParse(type).success).toBe(true);
-  });
+  it.each(['lambda', 'mcpServer', 'openApiSchema', 'smithyModel', 'apiGateway', 'lambdaFunctionArn'])(
+    'accepts "%s"',
+    type => {
+      expect(GatewayTargetTypeSchema.safeParse(type).success).toBe(true);
+    }
+  );
 
   it('rejects invalid type', () => {
     expect(GatewayTargetTypeSchema.safeParse('http').success).toBe(false);
@@ -387,6 +393,418 @@ describe('AgentCoreMcpRuntimeToolSchema', () => {
       bindings: [{ agentName: 'Agent1', envVarName: 'TOOL_ARN' }],
     });
     expect(result.success).toBe(true);
+  });
+});
+
+describe('ApiGatewayConfigSchema', () => {
+  it('accepts valid config', () => {
+    const result = ApiGatewayConfigSchema.safeParse({
+      restApiId: 'abc123',
+      stage: 'prod',
+      apiGatewayToolConfiguration: {
+        toolFilters: [{ filterPath: '/pets/*', methods: ['GET', 'POST'] }],
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing restApiId', () => {
+    const result = ApiGatewayConfigSchema.safeParse({
+      stage: 'prod',
+      apiGatewayToolConfiguration: {
+        toolFilters: [{ filterPath: '/*', methods: ['GET'] }],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty toolFilters', () => {
+    const result = ApiGatewayConfigSchema.safeParse({
+      restApiId: 'abc123',
+      stage: 'prod',
+      apiGatewayToolConfiguration: {
+        toolFilters: [],
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AgentCoreGatewayTargetSchema with apiGateway', () => {
+  it('accepts valid apiGateway target', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-api',
+      targetType: 'apiGateway',
+      apiGateway: {
+        restApiId: 'abc123',
+        stage: 'prod',
+        apiGatewayToolConfiguration: {
+          toolFilters: [{ filterPath: '/pets/*', methods: ['GET', 'POST'] }],
+        },
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects apiGateway without config', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-api',
+      targetType: 'apiGateway',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects apiGateway with compute', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-api',
+      targetType: 'apiGateway',
+      apiGateway: {
+        restApiId: 'abc123',
+        stage: 'prod',
+        apiGatewayToolConfiguration: {
+          toolFilters: [{ filterPath: '/*', methods: ['GET'] }],
+        },
+      },
+      compute: {
+        host: 'Lambda',
+        implementation: { language: 'Python', path: 'x', handler: 'x' },
+        pythonVersion: '3.13',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects apiGateway with endpoint', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-api',
+      targetType: 'apiGateway',
+      apiGateway: {
+        restApiId: 'abc123',
+        stage: 'prod',
+        apiGatewayToolConfiguration: {
+          toolFilters: [{ filterPath: '/*', methods: ['GET'] }],
+        },
+      },
+      endpoint: 'https://example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('SchemaSourceSchema', () => {
+  it('accepts inline source', () => {
+    const result = SchemaSourceSchema.safeParse({ inline: { path: 'specs/petstore.json' } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts S3 source', () => {
+    const result = SchemaSourceSchema.safeParse({ s3: { uri: 's3://bucket/key.json' } });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts S3 source with bucketOwnerAccountId', () => {
+    const result = SchemaSourceSchema.safeParse({
+      s3: { uri: 's3://bucket/key.json', bucketOwnerAccountId: '123456789012' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects S3 source without s3:// prefix', () => {
+    const result = SchemaSourceSchema.safeParse({ s3: { uri: 'https://bucket/key.json' } });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty inline path', () => {
+    const result = SchemaSourceSchema.safeParse({ inline: { path: '' } });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects object with both inline and s3', () => {
+    const result = SchemaSourceSchema.safeParse({
+      inline: { path: 'specs/petstore.json' },
+      s3: { uri: 's3://bucket/key.json' },
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AgentCoreGatewayTargetSchema with openApiSchema/smithyModel', () => {
+  it('accepts openApiSchema with inline schemaSource and auth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { inline: { path: 'specs/petstore.json' } },
+      outboundAuth: { type: 'OAUTH', credentialName: 'my-cred' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts openApiSchema with S3 schemaSource and auth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { s3: { uri: 's3://my-bucket/specs/petstore.json' } },
+      outboundAuth: { type: 'API_KEY', credentialName: 'my-key' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('accepts openApiSchema with S3 schemaSource and bucketOwnerAccountId', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { s3: { uri: 's3://my-bucket/specs/petstore.json', bucketOwnerAccountId: '123456789012' } },
+      outboundAuth: { type: 'OAUTH', credentialName: 'my-cred' },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects openApiSchema without outbound auth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { inline: { path: 'specs/petstore.json' } },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects smithyModel with outbound auth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-service',
+      targetType: 'smithyModel',
+      schemaSource: { inline: { path: 'models/service.json' } },
+      outboundAuth: { type: 'OAUTH', credentialName: 'my-cred' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects openApiSchema without schemaSource', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts smithyModel with inline schemaSource', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-service',
+      targetType: 'smithyModel',
+      schemaSource: { inline: { path: 'models/service.json' } },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects smithyModel without schemaSource', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-service',
+      targetType: 'smithyModel',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects openApiSchema with compute', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { inline: { path: 'specs/petstore.json' } },
+      compute: {
+        host: 'Lambda',
+        implementation: { language: 'Python', path: 'tools', handler: 'h' },
+        pythonVersion: 'PYTHON_3_12',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects openApiSchema with endpoint', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { inline: { path: 'specs/petstore.json' } },
+      endpoint: 'https://example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('accepts openApiSchema with outbound auth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'petstore',
+      targetType: 'openApiSchema',
+      schemaSource: { inline: { path: 'specs/petstore.json' } },
+      outboundAuth: { type: 'OAUTH', credentialName: 'my-cred' },
+    });
+    expect(result.success).toBe(true);
+  });
+});
+
+describe('LambdaFunctionArnConfigSchema', () => {
+  it('accepts valid config', () => {
+    const result = LambdaFunctionArnConfigSchema.safeParse({
+      lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+      toolSchemaFile: './tools.json',
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing lambdaArn', () => {
+    const result = LambdaFunctionArnConfigSchema.safeParse({
+      toolSchemaFile: './tools.json',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects missing toolSchemaFile', () => {
+    const result = LambdaFunctionArnConfigSchema.safeParse({
+      lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects empty lambdaArn', () => {
+    const result = LambdaFunctionArnConfigSchema.safeParse({
+      lambdaArn: '',
+      toolSchemaFile: './tools.json',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects extra fields (strict)', () => {
+    const result = LambdaFunctionArnConfigSchema.safeParse({
+      lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+      toolSchemaFile: './tools.json',
+      extraField: 'not allowed',
+    });
+    expect(result.success).toBe(false);
+  });
+});
+
+describe('AgentCoreGatewayTargetSchema with lambdaFunctionArn', () => {
+  it('accepts valid lambdaFunctionArn target', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects missing lambdaFunctionArn config', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with compute', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      compute: {
+        host: 'Lambda',
+        implementation: { language: 'Python', path: 'x', handler: 'x' },
+        pythonVersion: 'PYTHON_3_12',
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with endpoint', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      endpoint: 'https://example.com',
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with apiGateway config', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      apiGateway: {
+        restApiId: 'abc123',
+        stage: 'prod',
+        apiGatewayToolConfiguration: {
+          toolFilters: [{ filterPath: '/*', methods: ['GET'] }],
+        },
+      },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with outboundAuth', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      outboundAuth: { type: 'OAUTH' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with outboundAuth type NONE', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      outboundAuth: { type: 'NONE' },
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects lambdaFunctionArn with toolDefinitions', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-lambda',
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      toolDefinitions: [{ name: 'myTool', description: 'A tool', inputSchema: { type: 'object' as const } }],
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it('rejects apiGateway target with lambdaFunctionArn config', () => {
+    const result = AgentCoreGatewayTargetSchema.safeParse({
+      name: 'my-api',
+      targetType: 'apiGateway',
+      lambdaFunctionArn: {
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+      },
+      apiGateway: {
+        restApiId: 'abc123',
+        stage: 'prod',
+        apiGatewayToolConfiguration: {
+          toolFilters: [{ filterPath: '/*', methods: ['GET'] }],
+        },
+      },
+    });
+    expect(result.success).toBe(false);
   });
 });
 

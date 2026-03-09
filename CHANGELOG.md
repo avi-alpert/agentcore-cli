@@ -2,6 +2,58 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.3.0-preview.5.0] - 2026-03-09
+
+### Added
+- feat: add lambdaFunctionArn target type (#519) (fb6a4f7)
+- feat: add OpenAPI and Smithy model gateway target types (#516) (0d1021d)
+- feat: add API Key and No Auth support for API Gateway targets (#514) (763b937)
+- feat: configurable transaction search index percentage (#513) (c5edfeb)
+- feat: add API Gateway target TUI wizard and address review feedback (#511) (9ecf0fa)
+- feat: enable CloudWatch Transaction Search on deploy (#506) (315df61)
+- feat: add API Gateway REST API as new gateway target type (#509) (3b1df62)
+- feat: revamp agentcore status command to show all resources status (#504) (96e6691)
+- feat: add target type picker to gateway target wizard (#496) (#505) (b8bb758)
+- feat: make container dev mode language-agnostic (#500) (a158ffb)
+
+### Fixed
+- fix: wire identity OAuth and gateway auth CLI options through to primitives (#522) (32064ee)
+- fix: resolve schema paths relative to project root instead of agentcore/ (#523) (d4995cb)
+- fix: centralize auth rules, consolidate TUI flows, and clarify schema paths (#521) (2059bd1)
+- fix: conditionally show invoke in deploy next steps only when agents exist (#508) (baae06b)
+
+### Documentation
+- docs: update help text and docs for all gateway target types (#524) (a282d65)
+
+## [0.3.0-preview.4.0] - 2026-03-05
+
+## [0.3.0-preview.3.1] - 2026-03-05
+Known Issue
+For memory-only deployments, the agentcore status command printing out an error is a known bug for this release. We will follow up with a fix for the next release.
+### Added
+- feat: support individual memory deployment without agents (#483) (a75112e)
+- feat: add `agentcore traces` command and trace link in invoke TUI (#493) (b10b2c7)
+- feat: modular primitive architecture (#481) (0214f86)
+- feat: add `logs` command for streaming and searching agent runtime logs (#486) (7302109)
+- feat: add --diff flag to deploy command (#75) (#485) (3b4ee19)
+
+### Fixed
+- fix: hide logs and traces commands from TUI (#499) (125f83c)
+- fix: prevent CI runs from cancelling each other on main (#492) (0d6fc31)
+- fix: wire gateway-target CLI flags and default source to existing-endpoint (#488) (8c8b179)
+- fix: resolve CI failures for security audit, PR title validation, and dependabot noise (#470) (5bf2192)
+- fix: clear mcp.json gateways during remove-all to prevent orphaned AWS resources (#484) (d4aa281)
+- fix: make CLI flag values case-insensitive (#413) (c1144e0)
+
+### Documentation
+- docs: show default time ranges in traces and logs --help (#497) (b852179)
+- docs: add gateway documentation for commands, configuration, and local development (#474) (ec41be7)
+
+### Other Changes
+- ci: auto-run E2E tests for authorized team members (#495) (0eb359d)
+- test: enable gateway test coverage (#487) (41365e4)
+- ci: bump the github-actions group with 5 updates (#491) (48ebf23)
+
 ## [0.3.0-preview.3.0] - 2026-03-02
 
 ### Added

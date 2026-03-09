@@ -1,4 +1,13 @@
-import type { GatewayAuthorizerType, NodeRuntime, PythonRuntime, ToolDefinition } from '../../../../schema';
+import type {
+  ApiGatewayHttpMethod,
+  GatewayAuthorizerType,
+  GatewayTargetType,
+  NodeRuntime,
+  PythonRuntime,
+  SchemaSource,
+  ToolDefinition,
+} from '../../../../schema';
+import { TARGET_TYPE_AUTH_CONFIG } from '../../../../schema';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Gateway Flow Types
@@ -48,32 +57,63 @@ export type ComputeHost = 'Lambda' | 'AgentCoreRuntime';
  */
 export type AddGatewayTargetStep =
   | 'name'
-  | 'source'
+  | 'target-type'
   | 'endpoint'
   | 'language'
   | 'gateway'
   | 'host'
   | 'outbound-auth'
+  | 'rest-api-id'
+  | 'stage'
+  | 'tool-filters'
+  | 'api-gateway-auth'
+  | 'schema-source'
+  | 'lambda-arn'
+  | 'tool-schema'
   | 'confirm';
 
 export type TargetLanguage = 'Python' | 'TypeScript' | 'Other';
 
-export interface AddGatewayTargetConfig {
+/**
+ * Wizard-internal state — all fields optional, built incrementally as the user
+ * progresses through wizard steps. Not used outside the wizard/screen boundary.
+ */
+export interface GatewayTargetWizardState {
+  name: string;
+  description?: string;
+  sourcePath?: string;
+  language?: TargetLanguage;
+  targetType?: GatewayTargetType;
+  endpoint?: string;
+  gateway?: string;
+  host?: ComputeHost;
+  toolDefinition?: ToolDefinition;
+  outboundAuth?: {
+    type: 'OAUTH' | 'API_KEY' | 'NONE';
+    credentialName?: string;
+    scopes?: string[];
+  };
+  restApiId?: string;
+  stage?: string;
+  toolFilters?: { filterPath: string; methods: ApiGatewayHttpMethod[] }[];
+  /** Schema source for openApiSchema / smithyModel targets */
+  schemaSource?: SchemaSource;
+  lambdaArn?: string;
+  toolSchemaFile?: string;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Discriminated union — fully-formed configs passed downstream of the wizard.
+// Each variant has required fields for its target type.
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface McpServerTargetConfig {
+  targetType: 'mcpServer';
   name: string;
   description: string;
-  sourcePath: string;
-  language: TargetLanguage;
-  /** Source type for external endpoints */
-  source?: 'existing-endpoint' | 'create-new';
-  /** External endpoint URL */
-  endpoint?: string;
-  /** Gateway name */
-  gateway?: string;
-  /** Compute host (Lambda or AgentCoreRuntime) */
-  host: ComputeHost;
-  /** Derived tool definition */
+  endpoint: string;
+  gateway: string;
   toolDefinition: ToolDefinition;
-  /** Outbound auth configuration */
   outboundAuth?: {
     type: 'OAUTH' | 'API_KEY' | 'NONE';
     credentialName?: string;
@@ -81,14 +121,60 @@ export interface AddGatewayTargetConfig {
   };
 }
 
+export interface ApiGatewayTargetConfig {
+  targetType: 'apiGateway';
+  name: string;
+  gateway: string;
+  restApiId: string;
+  stage: string;
+  toolFilters?: { filterPath: string; methods: ApiGatewayHttpMethod[] }[];
+  outboundAuth?: {
+    type: 'API_KEY' | 'NONE';
+    credentialName?: string;
+  };
+}
+
+export interface SchemaBasedTargetConfig {
+  targetType: 'openApiSchema' | 'smithyModel';
+  name: string;
+  gateway: string;
+  schemaSource: SchemaSource;
+  outboundAuth?: {
+    type: 'OAUTH' | 'API_KEY' | 'NONE';
+    credentialName?: string;
+    scopes?: string[];
+  };
+}
+
+export interface LambdaFunctionArnTargetConfig {
+  targetType: 'lambdaFunctionArn';
+  name: string;
+  gateway: string;
+  lambdaArn: string;
+  toolSchemaFile: string;
+}
+
+export type AddGatewayTargetConfig =
+  | McpServerTargetConfig
+  | ApiGatewayTargetConfig
+  | SchemaBasedTargetConfig
+  | LambdaFunctionArnTargetConfig;
+
 export const MCP_TOOL_STEP_LABELS: Record<AddGatewayTargetStep, string> = {
   name: 'Name',
-  source: 'Source',
+  'target-type': 'Target Type',
   endpoint: 'Endpoint',
   language: 'Language',
   gateway: 'Gateway',
   host: 'Host',
   'outbound-auth': 'Outbound Auth',
+  'rest-api-id': 'REST API ID',
+  stage: 'Stage',
+  'tool-filters': 'Tool Filters',
+  'api-gateway-auth': 'Authorization',
+  'schema-source': 'Schema Source',
+  'lambda-arn': 'Lambda ARN',
+  'tool-schema': 'Tool Schema File',
   confirm: 'Confirm',
 };
 
@@ -104,9 +190,20 @@ export const AUTHORIZER_TYPE_OPTIONS = [
 
 export const SKIP_FOR_NOW = 'skip-for-now' as const;
 
-export const SOURCE_OPTIONS = [
-  { id: 'existing-endpoint', title: 'Existing endpoint', description: 'Connect to an existing MCP server' },
-  { id: 'create-new', title: 'Create new', description: 'Scaffold a new MCP server' },
+export const TARGET_TYPE_OPTIONS = [
+  { id: 'mcpServer', title: 'MCP Server endpoint', description: 'Connect to an existing MCP-compatible server' },
+  {
+    id: 'apiGateway',
+    title: 'API Gateway REST API',
+    description: 'Connect to an existing Amazon API Gateway REST API',
+  },
+  { id: 'openApiSchema', title: 'OpenAPI Schema', description: 'Auto-derive tools from an OpenAPI JSON spec' },
+  { id: 'smithyModel', title: 'Smithy Model', description: 'Auto-derive tools from a Smithy JSON model' },
+  {
+    id: 'lambdaFunctionArn',
+    title: 'Lambda function',
+    description: 'Connect to an existing AWS Lambda function',
+  },
 ] as const;
 
 export const TARGET_LANGUAGE_OPTIONS = [
@@ -120,9 +217,31 @@ export const COMPUTE_HOST_OPTIONS = [
   { id: 'AgentCoreRuntime', title: 'AgentCore Runtime', description: 'AgentCore Runtime (Python only)' },
 ] as const;
 
-export const OUTBOUND_AUTH_OPTIONS = [
+/** All possible outbound auth UI options, keyed by auth type. */
+const AUTH_OPTION_LABELS = {
+  NONE: { title: 'No authorization', description: 'No outbound authentication' },
+  OAUTH: { title: 'OAuth 2LO', description: 'OAuth 2.0 client credentials' },
+  API_KEY: { title: 'API Key', description: 'API key credential' },
+} as const;
+
+/** Derive the outbound auth UI options for a given target type from the centralized config. */
+export function getOutboundAuthOptions(
+  targetType: GatewayTargetType
+): { id: string; title: string; description: string }[] {
+  const config = TARGET_TYPE_AUTH_CONFIG[targetType];
+  return config.validAuthTypes.map(id => ({
+    id,
+    title: AUTH_OPTION_LABELS[id].title,
+    description: AUTH_OPTION_LABELS[id].description,
+  }));
+}
+
+export const OUTBOUND_AUTH_OPTIONS = getOutboundAuthOptions('mcpServer');
+
+export const API_GATEWAY_AUTH_OPTIONS = [
+  { id: 'IAM', title: 'IAM (recommended)', description: 'AWS IAM role-based authorization' },
+  { id: 'API_KEY', title: 'API Key', description: 'API key credential' },
   { id: 'NONE', title: 'No authorization', description: 'No outbound authentication' },
-  { id: 'OAUTH', title: 'OAuth 2LO', description: 'OAuth 2.0 client credentials' },
 ] as const;
 
 export const PYTHON_VERSION_OPTIONS = [

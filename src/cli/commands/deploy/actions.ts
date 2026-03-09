@@ -22,6 +22,7 @@ import {
   performStackTeardown,
   setupApiKeyProviders,
   setupOAuth2Providers,
+  setupTransactionSearch,
   synthesizeCdk,
   validateProject,
 } from '../../operations/deploy';
@@ -415,6 +416,19 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
 
     endStep('success');
 
+    // Post-deploy: Enable CloudWatch Transaction Search (non-blocking, silent)
+    const nextSteps = agentNames.length > 0 ? [...AGENT_NEXT_STEPS] : [...MEMORY_ONLY_NEXT_STEPS];
+    if (agentNames.length > 0) {
+      try {
+        const tsResult = await setupTransactionSearch({ region: target.region, accountId: target.account, agentNames });
+        if (tsResult.error) {
+          logger.log(`Transaction search setup warning: ${tsResult.error}`, 'warn');
+        }
+      } catch (err: unknown) {
+        logger.log(`Transaction search setup failed: ${getErrorMessage(err)}`, 'warn');
+      }
+    }
+
     logger.finalize(true);
 
     return {
@@ -423,7 +437,7 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       stackName,
       outputs,
       logPath: logger.getRelativeLogPath(),
-      nextSteps: agentNames.length > 0 ? AGENT_NEXT_STEPS : MEMORY_ONLY_NEXT_STEPS,
+      nextSteps,
     };
   } catch (err: unknown) {
     logger.log(getErrorMessage(err), 'error');

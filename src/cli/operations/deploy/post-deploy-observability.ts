@@ -1,0 +1,46 @@
+import { readCliConfig } from '../../../lib/schemas/io/cli-config';
+import { enableTransactionSearch } from '../../aws/transaction-search';
+
+export interface TransactionSearchSetupOptions {
+  region: string;
+  accountId: string;
+  agentNames: string[];
+}
+
+export interface TransactionSearchSetupResult {
+  success: boolean;
+  error?: string;
+}
+
+/**
+ * Post-deploy step: enable CloudWatch Transaction Search (Application Signals +
+ * resource policy + CloudWatchLogs destination + 100% indexing).
+ * All operations are idempotent.
+ *
+ * Can be disabled via ~/.agentcore/config.json: { "disableTransactionSearch": true }
+ *
+ * This is a non-blocking best-effort operation — failures do not fail the deploy.
+ */
+export async function setupTransactionSearch(
+  options: TransactionSearchSetupOptions
+): Promise<TransactionSearchSetupResult> {
+  const { region, accountId, agentNames } = options;
+
+  if (agentNames.length === 0) {
+    return { success: true };
+  }
+
+  const config = readCliConfig();
+  if (config.disableTransactionSearch) {
+    return { success: true };
+  }
+
+  const indexPercentage = config.transactionSearchIndexPercentage ?? 100;
+  const result = await enableTransactionSearch(region, accountId, indexPercentage);
+
+  if (!result.success) {
+    return { success: false, error: result.error };
+  }
+
+  return { success: true };
+}

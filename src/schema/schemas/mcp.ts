@@ -8,7 +8,14 @@ import { z } from 'zod';
 // MCP-Specific Schemas
 // ============================================================================
 
-export const GatewayTargetTypeSchema = z.enum(['lambda', 'mcpServer', 'openApiSchema', 'smithyModel']);
+export const GatewayTargetTypeSchema = z.enum([
+  'lambda',
+  'mcpServer',
+  'openApiSchema',
+  'smithyModel',
+  'apiGateway',
+  'lambdaFunctionArn',
+]);
 export type GatewayTargetType = z.infer<typeof GatewayTargetTypeSchema>;
 
 // ============================================================================
@@ -70,6 +77,76 @@ export const OutboundAuthSchema = z
   .strict();
 
 export type OutboundAuth = z.infer<typeof OutboundAuthSchema>;
+
+// ============================================================================
+// Target Type → Auth Rules (single source of truth)
+// ============================================================================
+
+/**
+ * Outbound authentication rules per gateway target type.
+ *
+ * - `authRequired` — target cannot be created without outbound auth
+ * - `validAuthTypes` — allowed OutboundAuthType values (empty = no outbound auth applicable)
+ * - `iamRoleFallback` — CDK passes GATEWAY_IAM_ROLE when no auth configured
+ */
+export const TARGET_TYPE_AUTH_CONFIG: Record<
+  GatewayTargetType,
+  { authRequired: boolean; validAuthTypes: readonly OutboundAuthType[]; iamRoleFallback: boolean }
+> = {
+  openApiSchema: { authRequired: true, validAuthTypes: ['OAUTH', 'API_KEY'], iamRoleFallback: false },
+  smithyModel: { authRequired: false, validAuthTypes: [], iamRoleFallback: true },
+  apiGateway: { authRequired: false, validAuthTypes: ['API_KEY', 'NONE'], iamRoleFallback: true },
+  mcpServer: { authRequired: false, validAuthTypes: ['OAUTH', 'NONE'], iamRoleFallback: false },
+  lambda: { authRequired: false, validAuthTypes: ['OAUTH', 'NONE'], iamRoleFallback: false },
+  lambdaFunctionArn: { authRequired: false, validAuthTypes: [], iamRoleFallback: true },
+};
+
+// ============================================================================
+// API Gateway Target Schemas
+// ============================================================================
+
+export const ApiGatewayHttpMethodSchema = z.enum(['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'HEAD', 'OPTIONS']);
+export type ApiGatewayHttpMethod = z.infer<typeof ApiGatewayHttpMethodSchema>;
+
+export const ApiGatewayToolFilterSchema = z
+  .object({
+    filterPath: z.string().min(1),
+    methods: z.array(ApiGatewayHttpMethodSchema).min(1),
+  })
+  .strict();
+
+export const ApiGatewayToolOverrideSchema = z
+  .object({
+    name: z.string().min(1),
+    path: z.string().min(1),
+    method: ApiGatewayHttpMethodSchema,
+    description: z.string().optional(),
+  })
+  .strict();
+
+export const ApiGatewayToolConfigurationSchema = z
+  .object({
+    toolFilters: z.array(ApiGatewayToolFilterSchema).min(1),
+    toolOverrides: z.array(ApiGatewayToolOverrideSchema).optional(),
+  })
+  .strict();
+
+export const ApiGatewayConfigSchema = z
+  .object({
+    restApiId: z.string().min(1),
+    stage: z.string().min(1),
+    apiGatewayToolConfiguration: ApiGatewayToolConfigurationSchema,
+  })
+  .strict();
+export type ApiGatewayConfig = z.infer<typeof ApiGatewayConfigSchema>;
+
+export const LambdaFunctionArnConfigSchema = z
+  .object({
+    lambdaArn: z.string().min(1).max(170),
+    toolSchemaFile: z.string().min(1),
+  })
+  .strict();
+export type LambdaFunctionArnConfig = z.infer<typeof LambdaFunctionArnConfigSchema>;
 
 export const McpImplLanguageSchema = z.enum(['TypeScript', 'Python']);
 export type McpImplementationLanguage = z.infer<typeof McpImplLanguageSchema>;
@@ -261,6 +338,32 @@ export const ToolComputeConfigSchema = z.discriminatedUnion('host', [
 export type ToolComputeConfig = z.infer<typeof ToolComputeConfigSchema>;
 
 // ============================================================================
+// Schema Source (for OpenAPI / Smithy targets)
+// ============================================================================
+
+/** S3 reference for an API schema file. */
+const SchemaS3SourceSchema = z
+  .object({
+    uri: z.string().min(1).startsWith('s3://'),
+    bucketOwnerAccountId: z.string().optional(),
+  })
+  .strict();
+
+/** Inline (local file) reference for an API schema file. Path is relative to project root. */
+const SchemaInlineSourceSchema = z
+  .object({
+    path: z.string().min(1),
+  })
+  .strict();
+
+/** Schema source: either a local file path (read at synth time) or an S3 URI. */
+export const SchemaSourceSchema = z.union([
+  z.object({ inline: SchemaInlineSourceSchema }).strict(),
+  z.object({ s3: SchemaS3SourceSchema }).strict(),
+]);
+export type SchemaSource = z.infer<typeof SchemaSourceSchema>;
+
+// ============================================================================
 // Gateway Target
 // ============================================================================
 
@@ -284,14 +387,155 @@ export const AgentCoreGatewayTargetSchema = z
     endpoint: z.string().url().optional(),
     /** Outbound auth configuration for the target. */
     outboundAuth: OutboundAuthSchema.optional(),
+    /** API Gateway configuration. Required for apiGateway target type. */
+    apiGateway: ApiGatewayConfigSchema.optional(),
+    /** Schema source for openApiSchema / smithyModel targets. */
+    schemaSource: SchemaSourceSchema.optional(),
+    /** Lambda Function ARN configuration. Required for lambdaFunctionArn target type. */
+    lambdaFunctionArn: LambdaFunctionArnConfigSchema.optional(),
   })
   .strict()
   .superRefine((data, ctx) => {
-    if (data.targetType === 'mcpServer' && !data.compute && !data.endpoint) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: 'MCP Server targets require either an endpoint URL or compute configuration.',
-      });
+    if (data.targetType === 'apiGateway') {
+      if (!data.apiGateway) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'apiGateway config is required for apiGateway target type',
+          path: ['apiGateway'],
+        });
+      }
+      if (data.compute) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'compute is not applicable for apiGateway target type',
+          path: ['compute'],
+        });
+      }
+      if (data.endpoint) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'endpoint is not applicable for apiGateway target type',
+          path: ['endpoint'],
+        });
+      }
+      if (data.toolDefinitions && data.toolDefinitions.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'toolDefinitions is not applicable for apiGateway target type (tools are auto-discovered)',
+          path: ['toolDefinitions'],
+        });
+      }
+      if (data.lambdaFunctionArn) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'lambdaFunctionArn is not applicable for apiGateway target type',
+          path: ['lambdaFunctionArn'],
+        });
+      }
+    }
+    if (data.targetType === 'openApiSchema' || data.targetType === 'smithyModel') {
+      if (!data.schemaSource) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${data.targetType} targets require a schemaSource.`,
+          path: ['schemaSource'],
+        });
+      }
+      if (data.compute) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `compute is not applicable for ${data.targetType} target type`,
+          path: ['compute'],
+        });
+      }
+      if (data.endpoint) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `endpoint is not applicable for ${data.targetType} target type`,
+          path: ['endpoint'],
+        });
+      }
+      if (data.toolDefinitions && data.toolDefinitions.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `toolDefinitions is not applicable for ${data.targetType} target type`,
+          path: ['toolDefinitions'],
+        });
+      }
+      if (data.apiGateway) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `apiGateway config is not applicable for ${data.targetType} target type`,
+          path: ['apiGateway'],
+        });
+      }
+    }
+    if (data.targetType === 'lambdaFunctionArn') {
+      if (!data.lambdaFunctionArn) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'lambdaFunctionArn config is required for lambdaFunctionArn target type',
+          path: ['lambdaFunctionArn'],
+        });
+      }
+      if (data.compute) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'compute is not applicable for lambdaFunctionArn target type',
+          path: ['compute'],
+        });
+      }
+      if (data.endpoint) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'endpoint is not applicable for lambdaFunctionArn target type',
+          path: ['endpoint'],
+        });
+      }
+      if (data.apiGateway) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'apiGateway is not applicable for lambdaFunctionArn target type',
+          path: ['apiGateway'],
+        });
+      }
+      if (data.outboundAuth) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'outboundAuth is not applicable for lambdaFunctionArn target type',
+          path: ['outboundAuth'],
+        });
+      }
+      if (data.toolDefinitions && data.toolDefinitions.length > 0) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message:
+            'toolDefinitions is not applicable for lambdaFunctionArn target type (tools are defined via toolSchemaFile)',
+          path: ['toolDefinitions'],
+        });
+      }
+    }
+    if (data.targetType === 'mcpServer') {
+      if (!data.compute && !data.endpoint) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'MCP Server targets require either an endpoint URL or compute configuration.',
+        });
+      }
+      if (data.apiGateway) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'apiGateway is not applicable for mcpServer target type',
+          path: ['apiGateway'],
+        });
+      }
+      if (data.lambdaFunctionArn) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'lambdaFunctionArn is not applicable for mcpServer target type',
+          path: ['lambdaFunctionArn'],
+        });
+      }
     }
     if (data.targetType === 'lambda' && !data.compute) {
       ctx.addIssue({
@@ -305,6 +549,30 @@ export const AgentCoreGatewayTargetSchema = z
         code: z.ZodIssueCode.custom,
         message: 'Lambda targets require at least one tool definition.',
         path: ['toolDefinitions'],
+      });
+    }
+    // Centralized outbound auth validation (driven by TARGET_TYPE_AUTH_CONFIG)
+    const authConfig = TARGET_TYPE_AUTH_CONFIG[data.targetType];
+    const authType = data.outboundAuth?.type ?? 'NONE';
+    if (authConfig.authRequired && authType === 'NONE') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${data.targetType} targets require outbound auth (${authConfig.validAuthTypes.join(' or ')})`,
+        path: ['outboundAuth'],
+      });
+    }
+    if (authConfig.validAuthTypes.length === 0 && authType !== 'NONE') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${data.targetType} targets use IAM role auth; outboundAuth is not applicable`,
+        path: ['outboundAuth'],
+      });
+    }
+    if (authConfig.validAuthTypes.length > 0 && authType !== 'NONE' && !authConfig.validAuthTypes.includes(authType)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${data.targetType} targets do not support ${authType} outbound auth`,
+        path: ['outboundAuth'],
       });
     }
     if (data.outboundAuth && data.outboundAuth.type !== 'NONE' && !data.outboundAuth.credentialName) {

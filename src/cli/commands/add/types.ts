@@ -49,7 +49,6 @@ export interface AddGatewayTargetOptions {
   name?: string;
   description?: string;
   type?: string;
-  source?: string;
   endpoint?: string;
   language?: 'Python' | 'TypeScript' | 'Other';
   gateway?: string;
@@ -60,6 +59,14 @@ export interface AddGatewayTargetOptions {
   oauthClientSecret?: string;
   oauthDiscoveryUrl?: string;
   oauthScopes?: string;
+  restApiId?: string;
+  stage?: string;
+  lambdaArn?: string;
+  toolSchemaFile?: string;
+  toolFilterPath?: string;
+  toolFilterMethods?: string;
+  schema?: string;
+  schemaS3Account?: string;
   json?: boolean;
 }
 

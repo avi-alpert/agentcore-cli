@@ -1,17 +1,17 @@
 import { gatewayTargetPrimitive } from '../../../primitives/registry';
 import { ErrorPrompt } from '../../components';
-import { useCreateGatewayTarget, useExistingGateways, useExistingToolNames } from '../../hooks/useCreateMcp';
+import { useExistingGateways, useExistingToolNames } from '../../hooks/useCreateMcp';
 import { AddSuccessScreen } from '../add/AddSuccessScreen';
 import { AddIdentityScreen } from '../identity/AddIdentityScreen';
 import type { AddIdentityConfig } from '../identity/types';
 import { useCreateIdentity, useExistingCredentials, useExistingIdentityNames } from '../identity/useCreateIdentity';
 import { AddGatewayTargetScreen } from './AddGatewayTargetScreen';
-import type { AddGatewayTargetConfig } from './types';
+import type { AddGatewayTargetConfig, AddGatewayTargetStep, GatewayTargetWizardState } from './types';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 
 type FlowState =
-  | { name: 'create-wizard' }
-  | { name: 'creating-credential'; pendingConfig: AddGatewayTargetConfig }
+  | { name: 'create-wizard'; resumeConfig?: GatewayTargetWizardState; resumeStep?: AddGatewayTargetStep }
+  | { name: 'creating-credential'; pendingConfig: GatewayTargetWizardState }
   | { name: 'create-success'; toolName: string; projectPath: string; loading?: boolean; loadingMessage?: string }
   | { name: 'error'; message: string };
 
@@ -33,7 +33,6 @@ export function AddGatewayTargetFlow({
   onDev,
   onDeploy,
 }: AddGatewayTargetFlowProps) {
-  const { createTool, reset: resetCreate } = useCreateGatewayTarget();
   const { gateways: existingGateways } = useExistingGateways();
   const { toolNames: existingToolNames } = useExistingToolNames();
   const { credentials } = useExistingCredentials();
@@ -46,6 +45,11 @@ export function AddGatewayTargetFlow({
     [credentials]
   );
 
+  const apiKeyCredentialNames = useMemo(
+    () => credentials.filter(c => c.type === 'ApiKeyCredentialProvider').map(c => c.name),
+    [credentials]
+  );
+
   // In non-interactive mode, exit after success (but not while loading)
   useEffect(() => {
     if (!isInteractive && flow.name === 'create-success' && !flow.loading) {
@@ -53,40 +57,57 @@ export function AddGatewayTargetFlow({
     }
   }, [isInteractive, flow, onExit]);
 
-  const handleCreateComplete = useCallback(
-    (config: AddGatewayTargetConfig) => {
-      setFlow({
-        name: 'create-success',
-        toolName: config.name,
-        projectPath: '',
-        loading: true,
-        loadingMessage: 'Creating gateway target...',
-      });
+  const handleCreateComplete = useCallback((config: AddGatewayTargetConfig) => {
+    setFlow({
+      name: 'create-success',
+      toolName: config.name,
+      projectPath: '',
+      loading: true,
+      loadingMessage: 'Creating gateway target...',
+    });
 
-      if (config.source === 'existing-endpoint') {
-        void gatewayTargetPrimitive
-          .createExternalGatewayTarget(config)
-          .then((result: { toolName: string; projectPath: string }) => {
-            setFlow({ name: 'create-success', toolName: result.toolName, projectPath: result.projectPath });
-          })
-          .catch((err: unknown) => {
-            setFlow({ name: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
-          });
-      } else {
-        void createTool(config).then(result => {
-          if (result.ok) {
-            const { toolName, projectPath } = result.result;
-            setFlow({ name: 'create-success', toolName, projectPath });
-            return;
-          }
-          setFlow({ name: 'error', message: result.error });
+    if (config.targetType === 'mcpServer') {
+      void gatewayTargetPrimitive
+        .createExternalGatewayTarget(config)
+        .then((result: { toolName: string; projectPath: string }) => {
+          setFlow({ name: 'create-success', toolName: result.toolName, projectPath: result.projectPath });
+        })
+        .catch((err: unknown) => {
+          setFlow({ name: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
         });
-      }
-    },
-    [createTool]
-  );
+    } else if (config.targetType === 'openApiSchema' || config.targetType === 'smithyModel') {
+      void gatewayTargetPrimitive
+        .createSchemaBasedGatewayTarget(config)
+        .then((result: { toolName: string }) => {
+          setFlow({ name: 'create-success', toolName: result.toolName, projectPath: '' });
+        })
+        .catch((err: unknown) => {
+          setFlow({ name: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+        });
+    } else if (config.targetType === 'apiGateway') {
+      void gatewayTargetPrimitive
+        .createApiGatewayTarget(config)
+        .then((result: { toolName: string }) => {
+          setFlow({ name: 'create-success', toolName: result.toolName, projectPath: '' });
+        })
+        .catch((err: unknown) => {
+          setFlow({ name: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+        });
+    } else if (config.targetType === 'lambdaFunctionArn') {
+      void gatewayTargetPrimitive
+        .createLambdaFunctionArnTarget(config)
+        .then((result: { toolName: string }) => {
+          setFlow({ name: 'create-success', toolName: result.toolName, projectPath: '' });
+        })
+        .catch((err: unknown) => {
+          setFlow({ name: 'error', message: err instanceof Error ? err.message : 'Unknown error' });
+        });
+    } else {
+      setFlow({ name: 'error', message: `Unsupported target type: ${(config as { targetType: string }).targetType}` });
+    }
+  }, []);
 
-  const handleCreateCredential = useCallback((pendingConfig: AddGatewayTargetConfig) => {
+  const handleCreateCredential = useCallback((pendingConfig: GatewayTargetWizardState) => {
     setFlow({ name: 'creating-credential', pendingConfig });
   }, []);
 
@@ -113,17 +134,23 @@ export function AddGatewayTargetFlow({
 
       void createIdentity(createConfig).then(result => {
         if (result.ok && flow.name === 'creating-credential') {
-          const finalConfig: AddGatewayTargetConfig = {
-            ...flow.pendingConfig,
-            outboundAuth: { type: 'OAUTH', credentialName: result.result.name },
-          };
-          handleCreateComplete(finalConfig);
+          const pending = flow.pendingConfig;
+          const authType = pending.outboundAuth?.type === 'API_KEY' ? 'API_KEY' : 'OAUTH';
+          // Resume wizard at confirm step with the new credential attached
+          setFlow({
+            name: 'create-wizard',
+            resumeConfig: {
+              ...pending,
+              outboundAuth: { type: authType, credentialName: result.result.name },
+            },
+            resumeStep: 'confirm',
+          });
         } else if (!result.ok) {
           setFlow({ name: 'error', message: result.error });
         }
       });
     },
-    [flow, createIdentity, handleCreateComplete]
+    [flow, createIdentity]
   );
 
   // Create wizard
@@ -133,21 +160,33 @@ export function AddGatewayTargetFlow({
         existingGateways={existingGateways}
         existingToolNames={existingToolNames}
         existingOAuthCredentialNames={oauthCredentialNames}
+        existingApiKeyCredentialNames={apiKeyCredentialNames}
         onComplete={handleCreateComplete}
         onCreateCredential={handleCreateCredential}
         onExit={onBack}
+        initialConfig={flow.resumeConfig}
+        initialStep={flow.resumeStep}
       />
     );
   }
 
   // Creating credential via identity screen
   if (flow.name === 'creating-credential') {
+    const resumeStep = flow.pendingConfig.targetType === 'apiGateway' ? 'api-gateway-auth' : 'outbound-auth';
     return (
       <AddIdentityScreen
         existingIdentityNames={existingIdentityNames}
         onComplete={handleIdentityComplete}
-        onExit={() => setFlow({ name: 'create-wizard' })}
-        initialType="OAuthCredentialProvider"
+        onExit={() =>
+          setFlow({
+            name: 'create-wizard',
+            resumeConfig: flow.pendingConfig,
+            resumeStep: resumeStep,
+          })
+        }
+        initialType={
+          flow.pendingConfig.outboundAuth?.type === 'API_KEY' ? 'ApiKeyCredentialProvider' : 'OAuthCredentialProvider'
+        }
       />
     );
   }
@@ -158,10 +197,10 @@ export function AddGatewayTargetFlow({
       <AddSuccessScreen
         isInteractive={isInteractive}
         message={`Added gateway target: ${flow.toolName}`}
-        detail={`Project created at ${flow.projectPath}`}
+        detail={flow.projectPath ? `Project created at ${flow.projectPath}` : undefined}
         loading={flow.loading}
         loadingMessage={flow.loadingMessage}
-        showDevOption={true}
+        showDevOption={false}
         onAddAnother={onBack}
         onDev={onDev}
         onDeploy={onDeploy}
@@ -176,7 +215,6 @@ export function AddGatewayTargetFlow({
       message="Failed to add gateway target"
       detail={flow.message}
       onBack={() => {
-        resetCreate();
         setFlow({ name: 'create-wizard' });
       }}
       onExit={onExit}

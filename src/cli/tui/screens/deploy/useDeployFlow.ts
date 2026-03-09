@@ -9,7 +9,7 @@ import {
 } from '../../../cloudformation';
 import { getErrorMessage, isChangesetInProgressError, isExpiredTokenError } from '../../../errors';
 import { ExecLogger } from '../../../logging';
-import { performStackTeardown } from '../../../operations/deploy';
+import { performStackTeardown, setupTransactionSearch } from '../../../operations/deploy';
 import { getGatewayTargetStatuses } from '../../../operations/deploy/gateway-status';
 import {
   type StackDiffSummary,
@@ -42,7 +42,7 @@ export interface PreSynthesized {
   stackNames: string[];
   switchableIoHost?: SwitchableIoHost;
   identityKmsKeyArn?: string;
-  oauthCredentials?: Record<string, { credentialProviderArn: string; clientSecretArn?: string; callbackUrl?: string }>;
+  allCredentials?: Record<string, { credentialProviderArn: string; clientSecretArn?: string; callbackUrl?: string }>;
 }
 
 interface DeployFlowOptions {
@@ -114,7 +114,7 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
   const stackNames = preSynthesized?.stackNames ?? preflight.stackNames;
   const switchableIoHost = preSynthesized?.switchableIoHost ?? preflight.switchableIoHost;
   const identityKmsKeyArn = preSynthesized?.identityKmsKeyArn ?? preflight.identityKmsKeyArn;
-  const oauthCredentials = preSynthesized?.oauthCredentials ?? preflight.oauthCredentials;
+  const allCredentials = preSynthesized?.allCredentials ?? preflight.allCredentials;
 
   const [publishAssetsStep, setPublishAssetsStep] = useState<Step>({ label: 'Publish assets', status: 'pending' });
   const [deployStep, setDeployStep] = useState<Step>({ label: 'Deploy to AWS', status: 'pending' });
@@ -269,7 +269,7 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
       existingState,
       identityKmsKeyArn,
       memories,
-      credentials: Object.keys(oauthCredentials).length > 0 ? oauthCredentials : undefined,
+      credentials: Object.keys(allCredentials).length > 0 ? allCredentials : undefined,
     });
     await configIO.writeDeployedState(deployedState);
 
@@ -282,7 +282,7 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
     if (allStatuses.length > 0) {
       setTargetStatuses(allStatuses);
     }
-  }, [context, stackNames, logger, identityKmsKeyArn, oauthCredentials]);
+  }, [context, stackNames, logger, identityKmsKeyArn, allCredentials]);
 
   // Start deploy when preflight completes OR when shouldStartDeploy is set
   useEffect(() => {
@@ -372,6 +372,26 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
             const message = error instanceof Error ? error.message : 'Unknown error';
             logger.log(`Failed to persist deployed state: ${message}`, 'warn');
           }
+
+          // Post-deploy: Enable CloudWatch Transaction Search (non-blocking, silent)
+          const agentNames = context?.projectSpec.agents?.map((a: { name: string }) => a.name) ?? [];
+          const targetRegion = context?.awsTargets[0]?.region;
+          const targetAccount = context?.awsTargets[0]?.account;
+          if (agentNames.length > 0 && targetRegion && targetAccount) {
+            try {
+              const tsResult = await setupTransactionSearch({
+                region: targetRegion,
+                accountId: targetAccount,
+                agentNames,
+              });
+              if (tsResult.error) {
+                logger.log(`Transaction search setup warning: ${tsResult.error}`, 'warn');
+              }
+            } catch (error) {
+              const message = error instanceof Error ? error.message : 'Unknown error';
+              logger.log(`Transaction search setup failed: ${message}`, 'warn');
+            }
+          }
         }
 
         logger.endStep('success');
@@ -433,6 +453,7 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
     switchableIoHost,
     context?.isTeardownDeploy,
     context?.awsTargets,
+    context?.projectSpec.agents,
     diffMode,
   ]);
 

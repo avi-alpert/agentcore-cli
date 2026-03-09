@@ -12,6 +12,7 @@ import {
   validateAddIdentityOptions,
   validateAddMemoryOptions,
 } from '../validate.js';
+import { existsSync, readFileSync } from 'fs';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mockReadProjectSpec = vi.fn();
@@ -24,7 +25,13 @@ vi.mock('../../../../lib/index.js', () => ({
     configExists = mockConfigExists;
     readMcpSpec = mockReadMcpSpec;
   },
+  findConfigRoot: vi.fn().mockReturnValue('/mock/project/agentcore'),
 }));
+
+vi.mock('fs', async importOriginal => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return { ...actual, existsSync: vi.fn().mockReturnValue(true), readFileSync: vi.fn().mockReturnValue('[]') };
+});
 
 // Helper: valid base options for each type
 const validAgentOptionsByo: AddAgentOptions = {
@@ -60,7 +67,7 @@ const validGatewayOptionsJwt: AddGatewayOptions = {
 
 const validGatewayTargetOptions: AddGatewayTargetOptions = {
   name: 'test-tool',
-  source: 'existing-endpoint',
+  type: 'mcp-server',
   endpoint: 'https://example.com/mcp',
   gateway: 'my-gateway',
 };
@@ -326,7 +333,7 @@ describe('validate', () => {
 
     it('returns error when no gateways exist', async () => {
       mockReadMcpSpec.mockResolvedValue({ agentCoreGateways: [] });
-      const result = await validateAddGatewayTargetOptions(validGatewayTargetOptions);
+      const result = await validateAddGatewayTargetOptions({ ...validGatewayTargetOptions });
       expect(result.valid).toBe(false);
       expect(result.error).toContain('No gateways found');
       expect(result.error).toContain('agentcore add gateway');
@@ -334,7 +341,7 @@ describe('validate', () => {
 
     it('returns error when specified gateway does not exist', async () => {
       mockReadMcpSpec.mockResolvedValue({ agentCoreGateways: [{ name: 'other-gateway' }] });
-      const result = await validateAddGatewayTargetOptions(validGatewayTargetOptions);
+      const result = await validateAddGatewayTargetOptions({ ...validGatewayTargetOptions });
       expect(result.valid).toBe(false);
       expect(result.error).toContain('Gateway "my-gateway" not found');
       expect(result.error).toContain('other-gateway');
@@ -345,22 +352,21 @@ describe('validate', () => {
       const result = await validateAddGatewayTargetOptions({ ...validGatewayTargetOptions });
       expect(result.valid).toBe(true);
     });
-    // AC20: existing-endpoint source validation
-    it('rejects create-new source', async () => {
+    // AC20: type validation
+    it('returns error when --type is missing', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'create-new' as any,
         gateway: 'my-gateway',
       };
       const result = await validateAddGatewayTargetOptions(options);
       expect(result.valid).toBe(false);
-      expect(result.error).toBe("Only 'existing-endpoint' source is currently supported");
+      expect(result.error).toContain('--type is required');
     });
 
-    it('passes for valid existing-endpoint with https', async () => {
+    it('accepts --type mcp-server', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'mcp-server',
         endpoint: 'https://example.com/mcp',
         gateway: 'my-gateway',
       };
@@ -369,10 +375,32 @@ describe('validate', () => {
       expect(options.language).toBe('Other');
     });
 
-    it('passes for valid existing-endpoint with http', async () => {
+    it('returns error for invalid --type', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'invalid',
+        gateway: 'my-gateway',
+      };
+      const result = await validateAddGatewayTargetOptions(options);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid type');
+    });
+
+    it('passes for mcp-server with https endpoint', async () => {
+      const options: AddGatewayTargetOptions = {
+        name: 'test-tool',
+        type: 'mcp-server',
+        endpoint: 'https://example.com/mcp',
+        gateway: 'my-gateway',
+      };
+      const result = await validateAddGatewayTargetOptions(options);
+      expect(result.valid).toBe(true);
+    });
+
+    it('passes for mcp-server with http endpoint', async () => {
+      const options: AddGatewayTargetOptions = {
+        name: 'test-tool',
+        type: 'mcp-server',
         endpoint: 'http://localhost:3000/mcp',
         gateway: 'my-gateway',
       };
@@ -380,21 +408,21 @@ describe('validate', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('returns error for existing-endpoint without endpoint', async () => {
+    it('returns error for mcp-server without endpoint', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'mcp-server',
         gateway: 'my-gateway',
       };
       const result = await validateAddGatewayTargetOptions(options);
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('--endpoint is required when source is existing-endpoint');
+      expect(result.error).toContain('--endpoint is required');
     });
 
-    it('returns error for existing-endpoint with non-http(s) URL', async () => {
+    it('returns error for mcp-server with non-http(s) URL', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'mcp-server',
         endpoint: 'ftp://example.com/mcp',
         gateway: 'my-gateway',
       };
@@ -403,10 +431,10 @@ describe('validate', () => {
       expect(result.error).toBe('Endpoint must use http:// or https:// protocol');
     });
 
-    it('returns error for existing-endpoint with invalid URL', async () => {
+    it('returns error for mcp-server with invalid URL', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'mcp-server',
         endpoint: 'not-a-url',
         gateway: 'my-gateway',
       };
@@ -423,6 +451,7 @@ describe('validate', () => {
 
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
+        type: 'mcp-server',
         endpoint: 'https://example.com/mcp',
         gateway: 'my-gateway',
         outboundAuthType: 'API_KEY',
@@ -440,6 +469,7 @@ describe('validate', () => {
 
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
+        type: 'mcp-server',
         endpoint: 'https://example.com/mcp',
         gateway: 'my-gateway',
         outboundAuthType: 'API_KEY',
@@ -457,6 +487,7 @@ describe('validate', () => {
 
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
+        type: 'mcp-server',
         endpoint: 'https://example.com/mcp',
         gateway: 'my-gateway',
         outboundAuthType: 'API_KEY',
@@ -531,17 +562,283 @@ describe('validate', () => {
       expect(result.error).toBe('--oauth-discovery-url must be a valid URL');
     });
 
-    it('rejects --host with existing-endpoint', async () => {
+    it('accepts valid api-gateway options', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects api-gateway without --rest-api-id', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        stage: 'prod',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('--rest-api-id is required');
+    });
+
+    it('rejects api-gateway without --stage', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('--stage is required');
+    });
+
+    it('rejects --endpoint for api-gateway type', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+        endpoint: 'https://example.com',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable');
+    });
+
+    it('rejects --host for api-gateway type', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+        host: 'Lambda',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable');
+    });
+
+    it('rejects --outbound-auth oauth for api-gateway type', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+        outboundAuthType: 'OAUTH',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('is not supported for api-gateway type');
+    });
+
+    it('accepts --outbound-auth api-key with --credential-name for api-gateway type', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+        outboundAuthType: 'API_KEY',
+        credentialName: 'my-key',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects --outbound-auth api-key without --credential-name for api-gateway type', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-api',
+        type: 'api-gateway',
+        restApiId: 'abc123',
+        stage: 'prod',
+        gateway: 'my-gateway',
+        outboundAuthType: 'API_KEY',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('--credential-name is required');
+    });
+
+    // Lambda Function ARN target validation
+    it('accepts valid lambda-function-arn options', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('[{"name":"tool1","description":"desc"}]');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('rejects lambda-function-arn without --lambda-arn', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('--lambda-arn is required');
+    });
+
+    it('rejects lambda-function-arn without --tool-schema-file', async () => {
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('--tool-schema-file is required');
+    });
+
+    it('accepts lambda-function-arn with absolute path', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify([{ name: 'tool1', description: 'desc' }]));
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: '/absolute/path/tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(true);
+      // Verify the absolute path was used as-is, not joined with project root
+      expect(vi.mocked(existsSync)).toHaveBeenCalledWith('/absolute/path/tools.json');
+      expect(vi.mocked(readFileSync)).toHaveBeenCalledWith('/absolute/path/tools.json', 'utf-8');
+    });
+
+    it('accepts lambda-function-arn with relative path resolved from project root', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue(JSON.stringify([{ name: 'tool1', description: 'desc' }]));
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(true);
+      // Verify relative path was resolved from project root (dirname of configRoot)
+      const calledPath = vi.mocked(existsSync).mock.calls.find(c => String(c[0]).includes('tools.json'));
+      expect(calledPath).toBeDefined();
+      expect(String(calledPath![0])).not.toBe('./tools.json'); // Should be resolved, not raw
+    });
+
+    it('rejects lambda-function-arn when file not found', async () => {
+      vi.mocked(existsSync).mockReturnValue(false);
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not found');
+    });
+
+    it('rejects lambda-function-arn with invalid JSON', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('not json');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not valid JSON');
+    });
+
+    it('rejects lambda-function-arn with non-array JSON', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('{}');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('JSON array');
+    });
+
+    it('rejects lambda-function-arn with empty array', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('[]');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('at least one tool definition');
+    });
+
+    it('rejects lambda-function-arn with missing name in element', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('[{"description":"d"}]');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('missing a valid "name"');
+    });
+
+    it('rejects --endpoint for lambda-function-arn type', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('[{"name":"tool1","description":"desc"}]');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+        endpoint: 'https://example.com',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable');
+    });
+
+    it('rejects --outbound-auth for lambda-function-arn type', async () => {
+      vi.mocked(existsSync).mockReturnValue(true);
+      vi.mocked(readFileSync).mockReturnValue('[{"name":"tool1","description":"desc"}]');
+      const result = await validateAddGatewayTargetOptions({
+        name: 'my-lambda',
+        type: 'lambda-function-arn',
+        lambdaArn: 'arn:aws:lambda:us-east-1:123456789012:function:my-func',
+        toolSchemaFile: './tools.json',
+        gateway: 'my-gateway',
+        outboundAuthType: 'NONE',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable');
+    });
+
+    it('rejects --host with mcp-server type', async () => {
       const options: AddGatewayTargetOptions = {
         name: 'test-tool',
-        source: 'existing-endpoint',
+        type: 'mcp-server',
         endpoint: 'https://example.com/mcp',
         host: 'Lambda',
         gateway: 'my-gateway',
       };
       const result = await validateAddGatewayTargetOptions(options);
       expect(result.valid).toBe(false);
-      expect(result.error).toBe('--host is not applicable for existing endpoint targets');
+      expect(result.error).toBe('--host is not applicable for MCP server targets');
     });
   });
 

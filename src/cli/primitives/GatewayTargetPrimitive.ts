@@ -3,6 +3,7 @@ import type {
   AgentCoreCliMcpDefs,
   AgentCoreGatewayTarget,
   AgentCoreMcpSpec,
+  ApiGatewayHttpMethod,
   DirectoryPath,
   FilePath,
 } from '../../schema';
@@ -13,7 +14,13 @@ import { getErrorMessage } from '../errors';
 import type { RemovableGatewayTarget } from '../operations/remove/remove-gateway-target';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
 import { getTemplateToolDefinitions, renderGatewayTargetTemplate } from '../templates/GatewayTargetRenderer';
-import type { AddGatewayTargetConfig } from '../tui/screens/mcp/types';
+import type {
+  ApiGatewayTargetConfig,
+  GatewayTargetWizardState,
+  LambdaFunctionArnTargetConfig,
+  McpServerTargetConfig,
+  SchemaBasedTargetConfig,
+} from '../tui/screens/mcp/types';
 import { DEFAULT_HANDLER, DEFAULT_NODE_VERSION, DEFAULT_PYTHON_VERSION } from '../tui/screens/mcp/types';
 import { BasePrimitive } from './BasePrimitive';
 import { SOURCE_CODE_NOTE } from './constants';
@@ -236,8 +243,10 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
       .description('Add a gateway target to the project')
       .option('--name <name>', 'Target name')
       .option('--description <desc>', 'Target description')
-      .option('--type <type>', 'Target type: mcpServer or lambda')
-      .option('--source <source>', 'Source: existing-endpoint or create-new')
+      .option(
+        '--type <type>',
+        'Target type (required): mcp-server, api-gateway, open-api-schema, smithy-model, lambda-function-arn'
+      )
       .option('--endpoint <url>', 'MCP server endpoint URL')
       .option('--language <lang>', 'Language: Python, TypeScript, Other')
       .option('--gateway <name>', 'Gateway name')
@@ -248,8 +257,24 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
       .option('--oauth-client-secret <secret>', 'OAuth client secret (creates credential inline)')
       .option('--oauth-discovery-url <url>', 'OAuth discovery URL (creates credential inline)')
       .option('--oauth-scopes <scopes>', 'OAuth scopes, comma-separated')
+      .option('--rest-api-id <id>', 'API Gateway REST API ID (required for api-gateway type)')
+      .option('--stage <stage>', 'API Gateway deployment stage (required for api-gateway type)')
+      .option('--tool-filter-path <path>', 'Tool filter path pattern, e.g. /pets/*')
+      .option('--tool-filter-methods <methods>', 'Comma-separated HTTP methods, e.g. GET,POST')
+      .option(
+        '--schema <path>',
+        'Path to schema file (relative to project root) or S3 URI (for open-api-schema / smithy-model)'
+      )
+      .option('--schema-s3-account <id>', 'S3 bucket owner account ID (for cross-account access)')
+      .option('--lambda-arn <arn>', 'Lambda function ARN (required for lambda-function-arn type)')
+      .option('--tool-schema-file <path>', 'Path to tool schema JSON file (required for lambda-function-arn type)')
       .option('--json', 'Output as JSON')
       .action(async (rawOptions: Record<string, string | boolean | undefined>) => {
+        // Commander camelCases --outbound-auth to outboundAuth, but our types use outboundAuthType
+        if (rawOptions.outboundAuth && !rawOptions.outboundAuthType) {
+          rawOptions.outboundAuthType = rawOptions.outboundAuth;
+          delete rawOptions.outboundAuth;
+        }
         const cliOptions = rawOptions as unknown as CLIAddGatewayTargetOptions;
         try {
           if (!findConfigRoot()) {
@@ -271,25 +296,117 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
           const outboundAuthMap: Record<string, 'OAUTH' | 'API_KEY' | 'NONE'> = {
             oauth: 'OAUTH',
             'api-key': 'API_KEY',
+            api_key: 'API_KEY',
             none: 'NONE',
           };
 
-          // Handle existing-endpoint targets differently (no code generation)
-          if (cliOptions.source === 'existing-endpoint' && cliOptions.endpoint) {
-            const config: AddGatewayTargetConfig = {
+          // Handle API Gateway targets (no code generation)
+          if (cliOptions.type === 'apiGateway') {
+            const config: ApiGatewayTargetConfig = {
+              targetType: 'apiGateway',
+              name: cliOptions.name!,
+              gateway: cliOptions.gateway!,
+              restApiId: cliOptions.restApiId!,
+              stage: cliOptions.stage!,
+              toolFilters: cliOptions.toolFilterPath
+                ? [
+                    {
+                      filterPath: cliOptions.toolFilterPath,
+                      methods: (cliOptions.toolFilterMethods?.split(',').map(m => m.trim()) ?? [
+                        'GET',
+                      ]) as ApiGatewayHttpMethod[],
+                    },
+                  ]
+                : undefined,
+              ...(cliOptions.outboundAuthType
+                ? {
+                    outboundAuth: {
+                      type: (outboundAuthMap[cliOptions.outboundAuthType.toLowerCase()] ?? 'NONE') as
+                        | 'API_KEY'
+                        | 'NONE',
+                      credentialName: cliOptions.credentialName,
+                    },
+                  }
+                : {}),
+            };
+            const result = await this.createApiGatewayTarget(config);
+            const output = { success: true, toolName: result.toolName };
+            if (cliOptions.json) {
+              console.log(JSON.stringify(output));
+            } else {
+              console.log(`Added gateway target '${result.toolName}'`);
+            }
+            process.exit(0);
+          }
+
+          // Handle schema-based targets (OpenAPI / Smithy)
+          if ((cliOptions.type === 'openApiSchema' || cliOptions.type === 'smithyModel') && cliOptions.schema) {
+            const isS3 = cliOptions.schema.startsWith('s3://');
+            const schemaSource = isS3
+              ? {
+                  s3: {
+                    uri: cliOptions.schema,
+                    ...(cliOptions.schemaS3Account ? { bucketOwnerAccountId: cliOptions.schemaS3Account } : {}),
+                  },
+                }
+              : { inline: { path: cliOptions.schema } };
+
+            const config: SchemaBasedTargetConfig = {
+              name: cliOptions.name!,
+              targetType: cliOptions.type,
+              schemaSource,
+              gateway: cliOptions.gateway!,
+              ...(cliOptions.outboundAuthType
+                ? {
+                    outboundAuth: {
+                      type: outboundAuthMap[cliOptions.outboundAuthType.toLowerCase()] ?? 'NONE',
+                      credentialName: cliOptions.credentialName,
+                    },
+                  }
+                : {}),
+            };
+            const result = await this.createSchemaBasedGatewayTarget(config);
+            const output = { success: true, toolName: result.toolName };
+            if (cliOptions.json) {
+              console.log(JSON.stringify(output));
+            } else {
+              console.log(`Added gateway target '${result.toolName}'`);
+            }
+            process.exit(0);
+          }
+
+          // Handle Lambda Function ARN targets (no code generation)
+          if (cliOptions.type === 'lambdaFunctionArn') {
+            const config = {
+              targetType: 'lambdaFunctionArn' as const,
+              name: cliOptions.name!,
+              gateway: cliOptions.gateway!,
+              lambdaArn: cliOptions.lambdaArn!,
+              toolSchemaFile: cliOptions.toolSchemaFile!,
+            };
+            const result = await this.createLambdaFunctionArnTarget(config);
+            const output = { success: true, toolName: result.toolName };
+            if (cliOptions.json) {
+              console.log(JSON.stringify(output));
+            } else {
+              console.log(`Added gateway target '${result.toolName}'`);
+            }
+            process.exit(0);
+          }
+
+          // Handle MCP server targets (existing endpoint, no code generation)
+          if (cliOptions.type === 'mcpServer' && cliOptions.endpoint) {
+            const config: McpServerTargetConfig = {
+              targetType: 'mcpServer',
               name: cliOptions.name!,
               description: cliOptions.description ?? `Tool for ${cliOptions.name!}`,
-              sourcePath: '',
-              language: cliOptions.language ?? 'Other',
-              host: 'AgentCoreRuntime',
+              endpoint: cliOptions.endpoint,
+              gateway: cliOptions.gateway!,
               toolDefinition: {
                 name: cliOptions.name!,
                 description: cliOptions.description ?? `Tool for ${cliOptions.name!}`,
                 inputSchema: { type: 'object' },
               },
-              gateway: cliOptions.gateway,
-              endpoint: cliOptions.endpoint,
-              source: 'existing-endpoint',
               ...(cliOptions.outboundAuthType
                 ? {
                     outboundAuth: {
@@ -409,13 +526,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
    * Create an external gateway target that connects to an existing MCP server endpoint.
    * Unlike `add()` which scaffolds new code, this registers an existing endpoint URL.
    */
-  async createExternalGatewayTarget(
-    config: AddGatewayTargetConfig
-  ): Promise<{ toolName: string; projectPath: string }> {
-    if (!config.endpoint) {
-      throw new Error('Endpoint URL is required for external MCP server targets.');
-    }
-
+  async createExternalGatewayTarget(config: McpServerTargetConfig): Promise<{ toolName: string; projectPath: string }> {
     const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
       ? await this.configIO.readMcpSpec()
       : { agentCoreGateways: [] };
@@ -451,11 +562,120 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
     return { toolName: config.name, projectPath: '' };
   }
 
+  /**
+   * Create an API Gateway target that connects to an existing Amazon API Gateway REST API.
+   * Unlike `add()` which scaffolds new code, this registers an existing REST API.
+   */
+  async createApiGatewayTarget(config: ApiGatewayTargetConfig): Promise<{ toolName: string }> {
+    const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
+      ? await this.configIO.readMcpSpec()
+      : { agentCoreGateways: [] };
+
+    const gateway = mcpSpec.agentCoreGateways.find(g => g.name === config.gateway);
+    if (!gateway) {
+      throw new Error(`Gateway "${config.gateway}" not found.`);
+    }
+
+    if (!gateway.targets) {
+      gateway.targets = [];
+    }
+
+    if (gateway.targets.some(t => t.name === config.name)) {
+      throw new Error(`Target "${config.name}" already exists in gateway "${gateway.name}".`);
+    }
+
+    const target: AgentCoreGatewayTarget = {
+      name: config.name,
+      targetType: 'apiGateway',
+      apiGateway: {
+        restApiId: config.restApiId,
+        stage: config.stage,
+        apiGatewayToolConfiguration: {
+          toolFilters: config.toolFilters ?? [{ filterPath: '/*', methods: ['GET'] }],
+        },
+      },
+      ...(config.outboundAuth && { outboundAuth: config.outboundAuth }),
+    };
+
+    gateway.targets.push(target);
+    await this.configIO.writeMcpSpec(mcpSpec);
+
+    return { toolName: config.name };
+  }
+
+  /**
+   * Create a schema-based gateway target (OpenAPI or Smithy).
+   * No code generation — tools are auto-derived from the schema by the service.
+   */
+  async createSchemaBasedGatewayTarget(config: SchemaBasedTargetConfig): Promise<{ toolName: string }> {
+    const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
+      ? await this.configIO.readMcpSpec()
+      : { agentCoreGateways: [] };
+
+    const gateway = mcpSpec.agentCoreGateways.find(g => g.name === config.gateway);
+    if (!gateway) {
+      throw new Error(`Gateway "${config.gateway}" not found.`);
+    }
+
+    if (gateway.targets.some(t => t.name === config.name)) {
+      throw new Error(`Target "${config.name}" already exists in gateway "${gateway.name}".`);
+    }
+
+    const target: AgentCoreGatewayTarget = {
+      name: config.name,
+      targetType: config.targetType,
+      schemaSource: config.schemaSource,
+      ...(config.outboundAuth && { outboundAuth: config.outboundAuth }),
+    };
+
+    gateway.targets.push(target);
+    await this.configIO.writeMcpSpec(mcpSpec);
+
+    return { toolName: config.name };
+  }
+
+  /**
+   * Create a Lambda Function ARN target that connects to an existing Lambda function.
+   * Unlike `add()` which scaffolds new code, this registers an existing Lambda function ARN.
+   */
+  async createLambdaFunctionArnTarget(config: LambdaFunctionArnTargetConfig): Promise<{ toolName: string }> {
+    const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
+      ? await this.configIO.readMcpSpec()
+      : { agentCoreGateways: [] };
+
+    const gateway = mcpSpec.agentCoreGateways.find(g => g.name === config.gateway);
+    if (!gateway) {
+      throw new Error(`Gateway "${config.gateway}" not found.`);
+    }
+
+    if (!gateway.targets) {
+      gateway.targets = [];
+    }
+
+    if (gateway.targets.some(t => t.name === config.name)) {
+      throw new Error(`Target "${config.name}" already exists in gateway "${gateway.name}".`);
+    }
+
+    const target: AgentCoreGatewayTarget = {
+      name: config.name,
+      targetType: 'lambdaFunctionArn',
+      lambdaFunctionArn: {
+        lambdaArn: config.lambdaArn,
+        toolSchemaFile: config.toolSchemaFile,
+      },
+    };
+
+    gateway.targets.push(target);
+    await this.configIO.writeMcpSpec(mcpSpec);
+
+    return { toolName: config.name };
+  }
+
   // ═══════════════════════════════════════════════════════════════════
   // Private helpers
   // ═══════════════════════════════════════════════════════════════════
 
-  private buildGatewayTargetConfig(options: AddGatewayTargetOptions): AddGatewayTargetConfig {
+  private buildGatewayTargetConfig(options: AddGatewayTargetOptions): GatewayTargetWizardState {
     const sourcePath = `${APP_DIR}/${MCP_APP_SUBDIR}/${options.name}`;
     const description = options.description ?? `Tool for ${options.name}`;
     return {
@@ -474,16 +694,16 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
   }
 
   private async createToolFromWizard(
-    config: AddGatewayTargetConfig
+    config: GatewayTargetWizardState
   ): Promise<{ mcpDefsPath: string; toolName: string; projectPath: string }> {
-    this.validateGatewayTargetLanguage(config.language);
+    this.validateGatewayTargetLanguage(config.language!);
 
     const mcpSpec: AgentCoreMcpSpec = this.configIO.configExists('mcp')
       ? await this.configIO.readMcpSpec()
       : { agentCoreGateways: [] };
 
     const toolDefs =
-      config.host === 'Lambda' ? getTemplateToolDefinitions(config.name, config.host) : [config.toolDefinition];
+      config.host === 'Lambda' ? getTemplateToolDefinitions(config.name, config.host) : [config.toolDefinition!];
 
     for (const toolDef of toolDefs) {
       ToolDefinitionSchema.parse(toolDef);
@@ -523,7 +743,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
           ? {
               host: 'Lambda',
               implementation: {
-                path: config.sourcePath,
+                path: config.sourcePath!,
                 language: config.language,
                 handler: DEFAULT_HANDLER,
               },
@@ -534,7 +754,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
           : {
               host: 'AgentCoreRuntime',
               implementation: {
-                path: config.sourcePath,
+                path: config.sourcePath!,
                 language: 'Python',
                 handler: 'server.py:main',
               },
@@ -543,7 +763,7 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
                 pythonVersion: DEFAULT_PYTHON_VERSION,
                 name: config.name,
                 entrypoint: 'server.py:main' as FilePath,
-                codeLocation: config.sourcePath as DirectoryPath,
+                codeLocation: config.sourcePath! as DirectoryPath,
                 networkMode: 'PUBLIC',
               },
             },
@@ -571,10 +791,10 @@ export class GatewayTargetPrimitive extends BasePrimitive<AddGatewayTargetOption
     // Render gateway target project template
     const configRoot = requireConfigRoot();
     const projectRoot = dirname(configRoot);
-    const absoluteSourcePath = join(projectRoot, config.sourcePath);
+    const absoluteSourcePath = join(projectRoot, config.sourcePath!);
     await renderGatewayTargetTemplate(config.name, absoluteSourcePath, config.language, config.host);
 
-    return { mcpDefsPath, toolName: config.name, projectPath: config.sourcePath };
+    return { mcpDefsPath, toolName: config.name, projectPath: config.sourcePath! };
   }
 
   private validateGatewayTargetLanguage(language: string): asserts language is 'Python' | 'TypeScript' | 'Other' {

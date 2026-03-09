@@ -1,10 +1,11 @@
-import { ConfigIO } from '../../../lib';
+import { ConfigIO, findConfigRoot } from '../../../lib';
 import {
   AgentNameSchema,
   BuildTypeSchema,
   GatewayNameSchema,
   ModelProviderSchema,
   SDKFrameworkSchema,
+  TARGET_TYPE_AUTH_CONFIG,
   TargetLanguageSchema,
   getSupportedModelProviders,
   matchEnumValue,
@@ -16,6 +17,8 @@ import type {
   AddIdentityOptions,
   AddMemoryOptions,
 } from './types';
+import { existsSync, readFileSync } from 'fs';
+import { dirname, extname, isAbsolute, join, resolve } from 'path';
 
 export interface ValidationResult {
   valid: boolean;
@@ -219,13 +222,29 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
     return { valid: false, error: '--name is required' };
   }
 
-  if (options.type && options.type !== 'mcpServer' && options.type !== 'lambda') {
-    return { valid: false, error: 'Invalid type. Valid options: mcpServer, lambda' };
+  if (!options.type) {
+    return {
+      valid: false,
+      error:
+        '--type is required. Valid options: mcp-server, api-gateway, open-api-schema, smithy-model, lambda-function-arn',
+    };
   }
 
-  if (options.source && options.source !== 'existing-endpoint') {
-    return { valid: false, error: "Only 'existing-endpoint' source is currently supported" };
+  const typeMap: Record<string, string> = {
+    'mcp-server': 'mcpServer',
+    'api-gateway': 'apiGateway',
+    'open-api-schema': 'openApiSchema',
+    'smithy-model': 'smithyModel',
+    'lambda-function-arn': 'lambdaFunctionArn',
+  };
+  const mappedType = typeMap[options.type];
+  if (!mappedType) {
+    return {
+      valid: false,
+      error: `Invalid type: ${options.type}. Valid options: mcp-server, api-gateway, open-api-schema, smithy-model, lambda-function-arn`,
+    };
   }
+  options.type = mappedType;
 
   // Gateway is required — a gateway target must be attached to a gateway
   if (!options.gateway) {
@@ -260,10 +279,123 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
     };
   }
 
-  // Default to existing-endpoint (only supported source for now)
-  options.source ??= 'existing-endpoint';
+  // API Gateway targets: validate early and return (skip outbound auth validation)
+  if (mappedType === 'apiGateway') {
+    if (!options.restApiId) {
+      return { valid: false, error: '--rest-api-id is required for api-gateway type' };
+    }
+    if (!options.stage) {
+      return { valid: false, error: '--stage is required for api-gateway type' };
+    }
+    if (options.endpoint) {
+      return { valid: false, error: '--endpoint is not applicable for api-gateway type' };
+    }
+    if (options.host) {
+      return { valid: false, error: '--host is not applicable for api-gateway type' };
+    }
+    if (options.language && options.language !== 'Other') {
+      return { valid: false, error: '--language is not applicable for api-gateway type' };
+    }
+    if (options.outboundAuthType) {
+      const apiGwAuth = TARGET_TYPE_AUTH_CONFIG.apiGateway;
+      const normalizedAuth = options.outboundAuthType.toUpperCase().replace('-', '_');
+      if (!apiGwAuth.validAuthTypes.includes(normalizedAuth as 'OAUTH' | 'API_KEY' | 'NONE')) {
+        return { valid: false, error: `${options.outboundAuthType} is not supported for api-gateway type` };
+      }
+      if (normalizedAuth === 'API_KEY' && !options.credentialName) {
+        return { valid: false, error: '--credential-name is required with --outbound-auth api-key' };
+      }
+    }
+    if (options.oauthClientId || options.oauthClientSecret || options.oauthDiscoveryUrl || options.oauthScopes) {
+      return { valid: false, error: 'OAuth options are not applicable for api-gateway type' };
+    }
+    if (options.lambdaArn) {
+      return { valid: false, error: '--lambda-arn is not applicable for api-gateway type' };
+    }
+    if (options.toolSchemaFile) {
+      return { valid: false, error: '--tool-schema-file is not applicable for api-gateway type' };
+    }
+    options.language = 'Other';
+    return { valid: true };
+  }
 
-  // Validate outbound auth configuration (applies to all source types)
+  // Lambda Function ARN targets: validate early and return
+  if (mappedType === 'lambdaFunctionArn') {
+    if (!options.lambdaArn) {
+      return { valid: false, error: '--lambda-arn is required for lambda-function-arn type' };
+    }
+    if (!options.toolSchemaFile) {
+      return { valid: false, error: '--tool-schema-file is required for lambda-function-arn type' };
+    }
+    if (options.endpoint) {
+      return { valid: false, error: '--endpoint is not applicable for lambda-function-arn type' };
+    }
+    if (options.host) {
+      return { valid: false, error: '--host is not applicable for lambda-function-arn type' };
+    }
+    if (options.language && options.language !== 'Other') {
+      return { valid: false, error: '--language is not applicable for lambda-function-arn type' };
+    }
+    if (options.restApiId) {
+      return { valid: false, error: '--rest-api-id is not applicable for lambda-function-arn type' };
+    }
+    if (options.stage) {
+      return { valid: false, error: '--stage is not applicable for lambda-function-arn type' };
+    }
+    if (options.toolFilterPath) {
+      return { valid: false, error: '--tool-filter-path is not applicable for lambda-function-arn type' };
+    }
+    if (options.toolFilterMethods) {
+      return { valid: false, error: '--tool-filter-methods is not applicable for lambda-function-arn type' };
+    }
+    if (options.outboundAuthType) {
+      return { valid: false, error: '--outbound-auth is not applicable for lambda-function-arn type' };
+    }
+    if (options.credentialName) {
+      return { valid: false, error: '--credential-name is not applicable for lambda-function-arn type' };
+    }
+    if (options.oauthClientId || options.oauthClientSecret || options.oauthDiscoveryUrl || options.oauthScopes) {
+      return { valid: false, error: 'OAuth options are not applicable for lambda-function-arn type' };
+    }
+
+    const configRoot = findConfigRoot();
+    const projectRoot = configRoot ? dirname(configRoot) : process.cwd();
+    const resolvedPath = isAbsolute(options.toolSchemaFile)
+      ? options.toolSchemaFile
+      : join(projectRoot, options.toolSchemaFile);
+
+    if (!existsSync(resolvedPath)) {
+      return { valid: false, error: `Tool schema file not found: ${options.toolSchemaFile}` };
+    }
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(readFileSync(resolvedPath, 'utf-8'));
+    } catch {
+      return { valid: false, error: `Tool schema file is not valid JSON: ${options.toolSchemaFile}` };
+    }
+
+    if (!Array.isArray(parsed)) {
+      return { valid: false, error: 'Tool schema file must contain a JSON array' };
+    }
+    if (parsed.length === 0) {
+      return { valid: false, error: 'Tool schema file must contain at least one tool definition' };
+    }
+    for (const [i, entry] of parsed.entries()) {
+      const item = entry as Record<string, unknown>;
+      if (typeof item.name !== 'string' || !item.name) {
+        return { valid: false, error: `Tool schema entry ${i} is missing a valid "name" field` };
+      }
+      if (typeof item.description !== 'string' || !item.description) {
+        return { valid: false, error: `Tool schema entry ${i} is missing a valid "description" field` };
+      }
+    }
+
+    options.language = 'Other';
+    return { valid: true };
+  }
+
+  // Validate outbound auth configuration
   if (options.outboundAuthType && options.outboundAuthType !== 'NONE') {
     const hasInlineOAuth = !!(options.oauthClientId ?? options.oauthClientSecret ?? options.oauthDiscoveryUrl);
 
@@ -309,12 +441,74 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
     }
   }
 
-  if (options.source === 'existing-endpoint') {
+  // Schema-based targets (OpenAPI / Smithy)
+  if (mappedType === 'openApiSchema' || mappedType === 'smithyModel') {
+    if (!options.schema) {
+      return { valid: false, error: '--schema is required for schema-based target types' };
+    }
+    if (options.endpoint) {
+      return { valid: false, error: `--endpoint is not applicable for ${mappedType} target type` };
+    }
     if (options.host) {
-      return { valid: false, error: '--host is not applicable for existing endpoint targets' };
+      return { valid: false, error: `--host is not applicable for ${mappedType} target type` };
+    }
+
+    // Auth validation from centralized config
+    const authConfig = TARGET_TYPE_AUTH_CONFIG[mappedType as keyof typeof TARGET_TYPE_AUTH_CONFIG];
+    const providedAuth = options.outboundAuthType ?? 'NONE';
+    if (authConfig.authRequired && providedAuth === 'NONE') {
+      return {
+        valid: false,
+        error: `${mappedType} targets require outbound auth (${authConfig.validAuthTypes.join(' or ')})`,
+      };
+    }
+    if (authConfig.validAuthTypes.length === 0 && providedAuth !== 'NONE') {
+      return {
+        valid: false,
+        error: `${mappedType} targets use IAM role auth; --outbound-auth is not applicable`,
+      };
+    }
+
+    const isS3 = options.schema.startsWith('s3://');
+    if (isS3) {
+      // Validate S3 URI format: s3://bucket/key
+      const s3Path = options.schema.slice(5); // strip 's3://'
+      if (!s3Path.includes('/') || s3Path.startsWith('/')) {
+        return { valid: false, error: 'Invalid S3 URI format. Expected: s3://bucket-name/key' };
+      }
+    } else {
+      // Local file validation — resolve relative to project root (parent of agentcore/)
+      const configRoot = findConfigRoot();
+      const projectRoot = configRoot ? dirname(configRoot) : undefined;
+      const resolvedPath = projectRoot ? join(projectRoot, options.schema) : resolve(options.schema);
+      if (!existsSync(resolvedPath)) {
+        return {
+          valid: false,
+          error: projectRoot
+            ? `Schema file not found: ${options.schema} (resolved to ${resolvedPath}). Path should be relative to the project root.`
+            : `Schema file not found: ${options.schema}`,
+        };
+      }
+      const ext = extname(resolvedPath).toLowerCase();
+      if (ext !== '.json') {
+        return { valid: false, error: `Schema file must be a JSON file (.json), got: ${ext}` };
+      }
+    }
+
+    if (options.schemaS3Account && !isS3) {
+      return { valid: false, error: '--schema-s3-account is only valid with S3 URIs' };
+    }
+
+    options.language = 'Other';
+    return { valid: true };
+  }
+
+  if (mappedType === 'mcpServer') {
+    if (options.host) {
+      return { valid: false, error: '--host is not applicable for MCP server targets' };
     }
     if (!options.endpoint) {
-      return { valid: false, error: '--endpoint is required when source is existing-endpoint' };
+      return { valid: false, error: '--endpoint is required for mcp-server type' };
     }
 
     try {
@@ -324,6 +518,13 @@ export async function validateAddGatewayTargetOptions(options: AddGatewayTargetO
       }
     } catch {
       return { valid: false, error: 'Endpoint must be a valid URL (e.g. https://example.com/mcp)' };
+    }
+
+    if (options.lambdaArn) {
+      return { valid: false, error: '--lambda-arn is not applicable for mcp-server type' };
+    }
+    if (options.toolSchemaFile) {
+      return { valid: false, error: '--tool-schema-file is not applicable for mcp-server type' };
     }
 
     // Populate defaults for fields skipped by external endpoint flow
