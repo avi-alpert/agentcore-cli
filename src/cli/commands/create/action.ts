@@ -4,6 +4,8 @@ import type {
   BuildType,
   DeployedState,
   ModelProvider,
+  NetworkMode,
+  ProtocolMode,
   SDKFramework,
   TargetLanguage,
 } from '../../../schema';
@@ -116,10 +118,14 @@ export interface CreateWithAgentOptions {
   cwd: string;
   buildType?: BuildType;
   language: TargetLanguage;
-  framework: SDKFramework;
-  modelProvider: ModelProvider;
+  framework?: SDKFramework;
+  modelProvider?: ModelProvider;
   apiKey?: string;
   memory: MemoryOption;
+  protocol?: ProtocolMode;
+  networkMode?: NetworkMode;
+  subnets?: string[];
+  securityGroups?: string[];
   skipGit?: boolean;
   skipPythonSetup?: boolean;
   onProgress?: ProgressCallback;
@@ -135,6 +141,10 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
     modelProvider,
     apiKey,
     memory,
+    protocol,
+    networkMode,
+    subnets,
+    securityGroups,
     skipGit,
     skipPythonSetup,
     onProgress,
@@ -164,25 +174,35 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
     // Note: In this context, agent name = project name since we're creating a project with a single agent
     onProgress?.('Add agent to project', 'start');
     const agentName = name;
+    const isMcp = protocol === 'MCP';
+    const resolvedFramework = isMcp ? ('Strands' as SDKFramework) : (framework ?? ('Strands' as SDKFramework));
+    const resolvedModelProvider = isMcp
+      ? ('Bedrock' as ModelProvider)
+      : (modelProvider ?? ('Bedrock' as ModelProvider));
+
     const generateConfig = {
       projectName: agentName,
       buildType: buildType ?? ('CodeZip' as BuildType),
-      sdk: framework,
-      modelProvider,
+      sdk: resolvedFramework,
+      modelProvider: resolvedModelProvider,
       apiKey,
       memory,
       language,
+      protocol: protocol ?? 'HTTP',
+      networkMode,
+      subnets,
+      securityGroups,
     };
 
     // Resolve credential strategy FIRST (new project has no existing credentials)
     let identityProviders: ReturnType<typeof mapModelProviderToIdentityProviders> = [];
     let strategy: Awaited<ReturnType<typeof credentialPrimitive.resolveCredentialStrategy>> | undefined;
 
-    if (modelProvider !== 'Bedrock') {
+    if (!isMcp && resolvedModelProvider !== 'Bedrock') {
       strategy = await credentialPrimitive.resolveCredentialStrategy(
         name,
         agentName,
-        modelProvider,
+        resolvedModelProvider,
         apiKey,
         configBaseDir,
         [] // New project has no existing credentials

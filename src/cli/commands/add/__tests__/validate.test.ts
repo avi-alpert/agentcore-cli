@@ -937,6 +937,116 @@ describe('validate', () => {
     });
   });
 
+  describe('validateAddAgentOptions protocol validation', () => {
+    it('MCP: succeeds with just name and language', () => {
+      const result = validateAddAgentOptions({
+        name: 'McpAgent',
+        type: 'create',
+        language: 'Python',
+        protocol: 'MCP',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('MCP: fails with --framework', () => {
+      const result = validateAddAgentOptions({
+        name: 'McpAgent',
+        type: 'create',
+        language: 'Python',
+        protocol: 'MCP',
+        framework: 'Strands',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable for MCP protocol');
+    });
+
+    it('MCP: fails with --model-provider', () => {
+      const result = validateAddAgentOptions({
+        name: 'McpAgent',
+        type: 'create',
+        language: 'Python',
+        protocol: 'MCP',
+        modelProvider: 'Bedrock',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable for MCP protocol');
+    });
+
+    it('MCP: fails with --memory (non-none)', () => {
+      const result = validateAddAgentOptions({
+        name: 'McpAgent',
+        type: 'create',
+        language: 'Python',
+        protocol: 'MCP',
+        memory: 'shortTerm',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('not applicable for MCP protocol');
+    });
+
+    it('A2A: succeeds with --framework Strands', () => {
+      const result = validateAddAgentOptions({
+        name: 'A2aAgent',
+        type: 'byo',
+        language: 'Python',
+        protocol: 'A2A',
+        framework: 'Strands',
+        modelProvider: 'Bedrock',
+        codeLocation: '/path/to/code',
+      });
+      expect(result.valid).toBe(true);
+    });
+
+    it('A2A: fails with --framework CrewAI', () => {
+      const result = validateAddAgentOptions({
+        name: 'A2aAgent',
+        type: 'byo',
+        language: 'Python',
+        protocol: 'A2A',
+        framework: 'CrewAI',
+        modelProvider: 'Bedrock',
+        codeLocation: '/path/to/code',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('does not support A2A protocol');
+    });
+
+    it('A2A: fails with --framework OpenAIAgents', () => {
+      const result = validateAddAgentOptions({
+        name: 'A2aAgent',
+        type: 'byo',
+        language: 'Python',
+        protocol: 'A2A',
+        framework: 'OpenAIAgents',
+        modelProvider: 'OpenAI',
+        codeLocation: '/path/to/code',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('does not support A2A protocol');
+    });
+
+    it('invalid protocol fails validation', () => {
+      const result = validateAddAgentOptions({
+        name: 'BadAgent',
+        type: 'create',
+        language: 'Python',
+        protocol: 'GRPC' as any,
+        framework: 'Strands',
+        modelProvider: 'Bedrock',
+      });
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Invalid protocol');
+    });
+
+    it('default (no --protocol) works as before (HTTP)', () => {
+      const result = validateAddAgentOptions({
+        ...validAgentOptionsByo,
+        protocol: undefined,
+      });
+      expect(result.valid).toBe(true);
+    });
+  });
+
   describe('validateAddIdentityOptions OAuth', () => {
     it('passes for valid OAuth identity', () => {
       const result = validateAddIdentityOptions({
@@ -987,5 +1097,82 @@ describe('validate', () => {
       expect(result.valid).toBe(false);
       expect(result.error).toContain('--api-key');
     });
+  });
+});
+
+describe('validateAddAgentOptions - VPC validation', () => {
+  const baseOptions: AddAgentOptions = {
+    name: 'TestAgent',
+    type: 'byo',
+    language: 'Python',
+    framework: 'Strands',
+    modelProvider: 'Bedrock',
+    build: 'CodeZip',
+    codeLocation: './app/test/',
+  };
+
+  it('accepts valid VPC options', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      networkMode: 'VPC',
+      subnets: 'subnet-12345678',
+      securityGroups: 'sg-12345678',
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts PUBLIC network mode without VPC options', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      networkMode: 'PUBLIC',
+    });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects invalid network mode', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      networkMode: 'INVALID',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('Invalid network mode');
+  });
+
+  it('rejects VPC mode without subnets', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      networkMode: 'VPC',
+      securityGroups: 'sg-12345678',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--subnets is required');
+  });
+
+  it('rejects VPC mode without security groups', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      networkMode: 'VPC',
+      subnets: 'subnet-12345678',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--security-groups is required');
+  });
+
+  it('rejects subnets without VPC mode', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      subnets: 'subnet-12345678',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('only valid with --network-mode VPC');
+  });
+
+  it('rejects security groups without VPC mode', () => {
+    const result = validateAddAgentOptions({
+      ...baseOptions,
+      securityGroups: 'sg-12345678',
+    });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('only valid with --network-mode VPC');
   });
 });

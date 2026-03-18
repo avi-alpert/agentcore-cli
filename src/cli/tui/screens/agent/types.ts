@@ -1,4 +1,12 @@
-import type { BuildType, ModelProvider, PythonRuntime, SDKFramework, TargetLanguage } from '../../../../schema';
+import type {
+  BuildType,
+  ModelProvider,
+  NetworkMode,
+  ProtocolMode,
+  PythonRuntime,
+  SDKFramework,
+  TargetLanguage,
+} from '../../../../schema';
 import { DEFAULT_MODEL_IDS, getSupportedModelProviders } from '../../../../schema';
 import type { MemoryOption } from '../generate/types';
 
@@ -31,9 +39,13 @@ export type AddAgentStep =
   | 'codeLocation'
   | 'buildType'
   | 'language'
+  | 'protocol'
   | 'framework'
   | 'modelProvider'
   | 'apiKey'
+  | 'networkMode'
+  | 'subnets'
+  | 'securityGroups'
   | 'memory'
   | 'confirm';
 
@@ -46,10 +58,18 @@ export interface AddAgentConfig {
   entrypoint: string;
   language: TargetLanguage;
   buildType: BuildType;
+  /** Protocol (HTTP, MCP, A2A). Defaults to HTTP. */
+  protocol: ProtocolMode;
   framework: SDKFramework;
   modelProvider: ModelProvider;
   /** API key for non-Bedrock model providers (optional - can be added later) */
   apiKey?: string;
+  /** Network mode for the runtime */
+  networkMode?: NetworkMode;
+  /** Subnet IDs for VPC mode */
+  subnets?: string[];
+  /** Security group IDs for VPC mode */
+  securityGroups?: string[];
   /** Python version (only for Python agents) */
   pythonVersion: PythonRuntime;
   /** Memory option (create path only) */
@@ -62,9 +82,13 @@ export const ADD_AGENT_STEP_LABELS: Record<AddAgentStep, string> = {
   codeLocation: 'Code',
   buildType: 'Build',
   language: 'Language',
+  protocol: 'Protocol',
   framework: 'Framework',
   modelProvider: 'Model',
   apiKey: 'API Key',
+  networkMode: 'Network',
+  subnets: 'Subnets',
+  securityGroups: 'Security Groups',
   memory: 'Memory',
   confirm: 'Confirm',
 };
@@ -113,6 +137,11 @@ export function getModelProviderOptionsForSdk(sdk: SDKFramework) {
 // ─────────────────────────────────────────────────────────────────────────────
 // Defaults
 // ─────────────────────────────────────────────────────────────────────────────
+
+export const NETWORK_MODE_OPTIONS = [
+  { id: 'PUBLIC', title: 'Public', description: undefined },
+  { id: 'VPC', title: 'VPC', description: 'Attach to your VPC' },
+] as const;
 
 export const DEFAULT_PYTHON_VERSION: PythonRuntime = 'PYTHON_3_12';
 export const DEFAULT_ENTRYPOINT = 'main.py';
