@@ -11,6 +11,7 @@ import type {
 } from '../../../../schema';
 import { DEFAULT_STRATEGY_NAMESPACES } from '../../../../schema';
 import { GatewayPrimitive } from '../../../primitives/GatewayPrimitive';
+import { buildAuthorizerConfigFromJwtConfig } from '../../../primitives/auth-utils';
 import {
   computeDefaultCredentialEnvVarName,
   computeManagedOAuthCredentialName,
@@ -131,6 +132,11 @@ export function mapGenerateConfigToAgent(config: GenerateConfig): AgentEnvSpec {
     ...(config.requestHeaderAllowlist?.length && {
       requestHeaderAllowlist: config.requestHeaderAllowlist,
     }),
+    ...(config.authorizerType && { authorizerType: config.authorizerType }),
+    ...(config.authorizerType === 'CUSTOM_JWT' &&
+      config.jwtConfig && {
+        authorizerConfiguration: buildAuthorizerConfigFromJwtConfig(config.jwtConfig),
+      }),
     ...(protocol !== 'MCP' && { modelProvider: config.modelProvider }),
     // MCP uses mcp.run() which is incompatible with the opentelemetry-instrument wrapper
     ...(protocol === 'MCP' && { instrumentation: { enableOtel: false } }),

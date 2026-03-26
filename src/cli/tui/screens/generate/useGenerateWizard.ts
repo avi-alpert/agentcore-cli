@@ -1,5 +1,6 @@
-import type { NetworkMode } from '../../../../schema';
+import type { NetworkMode, RuntimeAuthorizerType } from '../../../../schema';
 import { ProjectNameSchema } from '../../../../schema';
+import type { JwtConfigOptions } from '../../../primitives/auth-utils';
 import type { BuildType, GenerateConfig, GenerateStep, MemoryOption, ProtocolMode } from './types';
 import { BASE_GENERATE_STEPS, getModelProviderOptionsForSdk } from './types';
 import { useCallback, useMemo, useState } from 'react';
@@ -64,8 +65,14 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
         ...filtered.slice(0, afterAdvanced),
         ...networkSteps,
         'requestHeaderAllowlist',
+        'authorizerType',
         ...filtered.slice(afterAdvanced),
       ];
+    }
+    // Add jwtConfig step after authorizerType when CUSTOM_JWT is selected
+    if (config.authorizerType === 'CUSTOM_JWT') {
+      const authIndex = filtered.indexOf('authorizerType');
+      filtered = [...filtered.slice(0, authIndex + 1), 'jwtConfig', ...filtered.slice(authIndex + 1)];
     }
     return filtered;
   }, [
@@ -73,6 +80,7 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
     config.sdk,
     config.protocol,
     config.networkMode,
+    config.authorizerType,
     hasInitialName,
     sdkSelected,
     advancedSelected,
@@ -203,10 +211,25 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
 
   const setRequestHeaderAllowlist = useCallback((requestHeaderAllowlist: string[]) => {
     setConfig(c => ({ ...c, requestHeaderAllowlist }));
-    setStep('confirm');
+    setStep('authorizerType');
   }, []);
 
   const skipRequestHeaderAllowlist = useCallback(() => {
+    setStep('authorizerType');
+  }, []);
+
+  const setAuthorizerType = useCallback((authorizerType: RuntimeAuthorizerType) => {
+    setConfig(c => ({ ...c, authorizerType }));
+    if (authorizerType === 'CUSTOM_JWT') {
+      setStep('jwtConfig');
+    } else {
+      setConfig(c => ({ ...c, authorizerType, jwtConfig: undefined }));
+      setStep('confirm');
+    }
+  }, []);
+
+  const setJwtConfig = useCallback((jwtConfig: JwtConfigOptions) => {
+    setConfig(c => ({ ...c, jwtConfig }));
     setStep('confirm');
   }, []);
 
@@ -258,6 +281,8 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
     setSecurityGroups,
     setRequestHeaderAllowlist,
     skipRequestHeaderAllowlist,
+    setAuthorizerType,
+    setJwtConfig,
     goBack,
     reset,
     initWithName,
