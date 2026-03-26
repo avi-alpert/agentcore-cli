@@ -52,6 +52,8 @@ export type AddAgentStep =
   | 'requestHeaderAllowlist'
   | 'authorizerType'
   | 'jwtConfig'
+  | 'idleTimeout'
+  | 'maxLifetime'
   | 'memory'
   | 'region'
   | 'bedrockAgent'
@@ -85,6 +87,10 @@ export interface AddAgentConfig {
   authorizerType?: RuntimeAuthorizerType;
   /** JWT config for CUSTOM_JWT authorizer */
   jwtConfig?: JwtConfigOptions;
+  /** Idle session timeout in seconds (LIFECYCLE_TIMEOUT_MIN-LIFECYCLE_TIMEOUT_MAX) */
+  idleRuntimeSessionTimeout?: number;
+  /** Max instance lifetime in seconds (LIFECYCLE_TIMEOUT_MIN-LIFECYCLE_TIMEOUT_MAX) */
+  maxLifetime?: number;
   /** Python version (only for Python agents) */
   pythonVersion: PythonRuntime;
   /** Memory option (create path only) */
@@ -114,6 +120,8 @@ export const ADD_AGENT_STEP_LABELS: Record<AddAgentStep, string> = {
   requestHeaderAllowlist: 'Headers',
   authorizerType: 'Auth',
   jwtConfig: 'JWT Config',
+  idleTimeout: 'Idle Timeout',
+  maxLifetime: 'Max Lifetime',
   memory: 'Memory',
   region: 'Region',
   bedrockAgent: 'Agent',

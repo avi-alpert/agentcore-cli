@@ -14,6 +14,7 @@ import {
   getSupportedModelProviders,
   matchEnumValue,
 } from '../../../schema';
+import { parseAndValidateLifecycleOptions } from '../shared/lifecycle-utils';
 import { validateVpcOptions } from '../shared/vpc-utils';
 import { validateJwtAuthorizerOptions } from './auth-options';
 import type {
@@ -136,6 +137,12 @@ export function validateAddAgentOptions(options: AddAgentOptions): ValidationRes
         error: `Invalid memory option: ${options.memory}. Use none, shortTerm, or longAndShortTerm`,
       };
     }
+    // Parse and validate lifecycle configuration for import path
+    const lcResult = parseAndValidateLifecycleOptions(options);
+    if (!lcResult.valid) return lcResult;
+    if (lcResult.idleTimeout !== undefined) options.idleTimeout = lcResult.idleTimeout;
+    if (lcResult.maxLifetime !== undefined) options.maxLifetime = lcResult.maxLifetime;
+
     // Force import defaults
     options.modelProvider = 'Bedrock' as typeof options.modelProvider;
     options.language = 'Python' as typeof options.language;
@@ -165,6 +172,12 @@ export function validateAddAgentOptions(options: AddAgentOptions): ValidationRes
     if (isByoPath && !options.codeLocation) {
       return { valid: false, error: '--code-location is required for BYO path' };
     }
+
+    // Parse and validate lifecycle configuration for MCP path
+    const mcpLcResult = parseAndValidateLifecycleOptions(options);
+    if (!mcpLcResult.valid) return mcpLcResult;
+    if (mcpLcResult.idleTimeout !== undefined) options.idleTimeout = mcpLcResult.idleTimeout;
+    if (mcpLcResult.maxLifetime !== undefined) options.maxLifetime = mcpLcResult.maxLifetime;
 
     return { valid: true };
   }
@@ -233,6 +246,12 @@ export function validateAddAgentOptions(options: AddAgentOptions): ValidationRes
       };
     }
   }
+
+  // Parse and validate lifecycle configuration
+  const lifecycleResult = parseAndValidateLifecycleOptions(options);
+  if (!lifecycleResult.valid) return lifecycleResult;
+  if (lifecycleResult.idleTimeout !== undefined) options.idleTimeout = lifecycleResult.idleTimeout;
+  if (lifecycleResult.maxLifetime !== undefined) options.maxLifetime = lifecycleResult.maxLifetime;
 
   // Validate VPC options
   const vpcResult = validateVpcOptions(options);

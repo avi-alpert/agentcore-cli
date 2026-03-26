@@ -1,6 +1,6 @@
 import { APP_DIR, ConfigIO } from '../../../../lib';
 import type { ModelProvider, NetworkMode, RuntimeAuthorizerType, SDKFramework } from '../../../../schema';
-import { AgentNameSchema, DEFAULT_MODEL_IDS } from '../../../../schema';
+import { AgentNameSchema, DEFAULT_MODEL_IDS, LIFECYCLE_TIMEOUT_MAX, LIFECYCLE_TIMEOUT_MIN } from '../../../../schema';
 import { listBedrockAgentAliases, listBedrockAgents } from '../../../aws/bedrock-import';
 import type { BedrockAgentSummary, BedrockAliasSummary } from '../../../aws/bedrock-import-types';
 import { parseAndNormalizeHeaders, validateHeaderAllowlist } from '../../../commands/shared/header-utils';
@@ -79,6 +79,8 @@ type ByoStep =
   | 'requestHeaderAllowlist'
   | 'authorizerType'
   | 'jwtConfig'
+  | 'idleTimeout'
+  | 'maxLifetime'
   | 'confirm';
 
 const INITIAL_STEPS: InitialStep[] = ['name', 'agentType'];
@@ -130,6 +132,8 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
     subnets: '' as string,
     securityGroups: '' as string,
     requestHeaderAllowlist: '' as string,
+    idleTimeout: '' as string,
+    maxLifetime: '' as string,
   });
   const [byoAdvancedSelected, setByoAdvancedSelected] = useState(false);
   const [byoAuthorizerType, setByoAuthorizerType] = useState<RuntimeAuthorizerType>('AWS_IAM');
@@ -249,6 +253,8 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
         generateWizard.config.jwtConfig && {
           jwtConfig: generateWizard.config.jwtConfig,
         }),
+      idleRuntimeSessionTimeout: generateWizard.config.idleRuntimeSessionTimeout,
+      maxLifetime: generateWizard.config.maxLifetime,
       pythonVersion: DEFAULT_PYTHON_VERSION,
       memory: generateWizard.config.memory,
     };
@@ -285,6 +291,8 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
         ...networkSteps,
         'requestHeaderAllowlist',
         'authorizerType',
+        'idleTimeout',
+        'maxLifetime',
         ...steps.slice(afterAdvanced),
       ];
     }
@@ -352,6 +360,8 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
       ...(requestHeaderAllowlist.length > 0 && { requestHeaderAllowlist }),
       ...(byoAuthorizerType !== 'AWS_IAM' && { authorizerType: byoAuthorizerType }),
       ...(byoAuthorizerType === 'CUSTOM_JWT' && byoJwtConfig && { jwtConfig: byoJwtConfig }),
+      ...(byoConfig.idleTimeout && { idleRuntimeSessionTimeout: Number(byoConfig.idleTimeout) }),
+      ...(byoConfig.maxLifetime && { maxLifetime: Number(byoConfig.maxLifetime) }),
       pythonVersion: DEFAULT_PYTHON_VERSION,
       memory: 'none',
     };
@@ -402,7 +412,14 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
         setByoStep('networkMode');
       } else {
         setByoAdvancedSelected(false);
-        setByoConfig(c => ({ ...c, networkMode: 'PUBLIC' as NetworkMode, subnets: '', securityGroups: '' }));
+        setByoConfig(c => ({
+          ...c,
+          networkMode: 'PUBLIC' as NetworkMode,
+          subnets: '',
+          securityGroups: '',
+          idleTimeout: '',
+          maxLifetime: '',
+        }));
         setByoStep('confirm');
       }
     },
@@ -702,7 +719,9 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
       byoStep === 'apiKey' ||
       byoStep === 'subnets' ||
       byoStep === 'securityGroups' ||
-      byoStep === 'requestHeaderAllowlist'
+      byoStep === 'requestHeaderAllowlist' ||
+      byoStep === 'idleTimeout' ||
+      byoStep === 'maxLifetime'
     ) {
       return HELP_TEXT.TEXT_INPUT;
     }
@@ -1075,6 +1094,48 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
           />
         )}
 
+        {byoStep === 'idleTimeout' && (
+          <TextInput
+            prompt={`Idle session timeout in seconds (${LIFECYCLE_TIMEOUT_MIN}-${LIFECYCLE_TIMEOUT_MAX}, or press Enter to skip)`}
+            initialValue=""
+            customValidation={value => {
+              if (!value) return true;
+              const n = Number(value);
+              if (isNaN(n) || !Number.isInteger(n) || n < LIFECYCLE_TIMEOUT_MIN || n > LIFECYCLE_TIMEOUT_MAX)
+                return `Must be an integer between ${LIFECYCLE_TIMEOUT_MIN} and ${LIFECYCLE_TIMEOUT_MAX}`;
+              return true;
+            }}
+            onSubmit={value => {
+              setByoConfig(c => ({ ...c, idleTimeout: value }));
+              setByoStep('maxLifetime');
+            }}
+            onCancel={handleByoBack}
+          />
+        )}
+
+        {byoStep === 'maxLifetime' && (
+          <TextInput
+            prompt={`Max instance lifetime in seconds (${LIFECYCLE_TIMEOUT_MIN}-${LIFECYCLE_TIMEOUT_MAX}, or press Enter to skip)`}
+            initialValue=""
+            customValidation={value => {
+              if (!value) return true;
+              const n = Number(value);
+              if (isNaN(n) || !Number.isInteger(n) || n < LIFECYCLE_TIMEOUT_MIN || n > LIFECYCLE_TIMEOUT_MAX)
+                return `Must be an integer between ${LIFECYCLE_TIMEOUT_MIN} and ${LIFECYCLE_TIMEOUT_MAX}`;
+              if (byoConfig.idleTimeout) {
+                const idle = Number(byoConfig.idleTimeout);
+                if (!isNaN(idle) && n < idle) return 'Must be >= idle timeout';
+              }
+              return true;
+            }}
+            onSubmit={value => {
+              setByoConfig(c => ({ ...c, maxLifetime: value }));
+              setByoStep('confirm');
+            }}
+            onCancel={handleByoBack}
+          />
+        )}
+
         {byoStep === 'confirm' && (
           <ConfirmReview
             fields={[
@@ -1138,6 +1199,8 @@ export function AddAgentScreen({ existingAgentNames, onComplete, onExit }: AddAg
                       : []),
                   ]
                 : []),
+              ...(byoConfig.idleTimeout ? [{ label: 'Idle Timeout', value: `${byoConfig.idleTimeout}s` }] : []),
+              ...(byoConfig.maxLifetime ? [{ label: 'Max Lifetime', value: `${byoConfig.maxLifetime}s` }] : []),
             ]}
           />
         )}
