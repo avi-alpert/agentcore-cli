@@ -3,6 +3,7 @@ import { getCredentialProvider } from './account';
 import {
   BedrockAgentCoreClient,
   EvaluateCommand,
+  type EvaluationReferenceInput,
   InvokeAgentRuntimeCommand,
   StopRuntimeSessionCommand,
 } from '@aws-sdk/client-bedrock-agentcore';
@@ -424,6 +425,7 @@ export interface EvaluateOptions {
   sessionSpans: DocumentType[];
   targetSpanIds?: string[];
   targetTraceIds?: string[];
+  evaluationReferenceInputs?: EvaluationReferenceInput[];
 }
 
 export interface EvaluationResultContext {
@@ -476,6 +478,7 @@ export async function evaluate(options: EvaluateOptions): Promise<EvaluateResult
       sessionSpans: options.sessionSpans,
     },
     ...(evaluationTarget ? { evaluationTarget } : {}),
+    ...(options.evaluationReferenceInputs ? { evaluationReferenceInputs: options.evaluationReferenceInputs } : {}),
   });
 
   const response = await client.send(command);
