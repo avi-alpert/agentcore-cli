@@ -10,6 +10,7 @@ import {
 } from '../../aws';
 import { InvokeLogger } from '../../logging';
 import { formatMcpToolList } from '../../operations/dev/utils';
+import { canFetchRuntimeToken, fetchRuntimeToken } from '../../operations/fetch-access';
 import type { InvokeOptions, InvokeResult } from './types';
 
 export interface InvokeContext {
@@ -54,18 +55,18 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
     return { success: false, error: `Target config '${selectedTargetName}' not found in aws-targets` };
   }
 
-  if (project.agents.length === 0) {
+  if (project.runtimes.length === 0) {
     return { success: false, error: 'No agents defined in configuration' };
   }
 
   // Resolve agent
-  const agentNames = project.agents.map(a => a.name);
+  const agentNames = project.runtimes.map(a => a.name);
 
-  if (!options.agentName && project.agents.length > 1) {
-    return { success: false, error: `Multiple agents found. Use --agent to specify one: ${agentNames.join(', ')}` };
+  if (!options.agentName && project.runtimes.length > 1) {
+    return { success: false, error: `Multiple runtimes found. Use --runtime to specify one: ${agentNames.join(', ')}` };
   }
 
-  const agentSpec = options.agentName ? project.agents.find(a => a.name === options.agentName) : project.agents[0];
+  const agentSpec = options.agentName ? project.runtimes.find(a => a.name === options.agentName) : project.runtimes[0];
 
   if (options.agentName && !agentSpec) {
     return { success: false, error: `Agent '${options.agentName}' not found. Available: ${agentNames.join(', ')}` };
@@ -83,10 +84,26 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
   }
 
   // Get the deployed state for this specific agent
-  const agentState = targetState?.resources?.agents?.[agentSpec.name];
+  const agentState = targetState?.resources?.runtimes?.[agentSpec.name];
 
   if (!agentState) {
     return { success: false, error: `Agent '${agentSpec.name}' is not deployed to target '${selectedTargetName}'` };
+  }
+
+  // Auto-fetch bearer token for CUSTOM_JWT agents when not provided
+  if (agentSpec.authorizerType === 'CUSTOM_JWT' && !options.bearerToken) {
+    const canFetch = await canFetchRuntimeToken(agentSpec.name);
+    if (canFetch) {
+      try {
+        const tokenResult = await fetchRuntimeToken(agentSpec.name, { deployTarget: selectedTargetName });
+        options = { ...options, bearerToken: tokenResult.token };
+      } catch (err) {
+        return {
+          success: false,
+          error: `CUSTOM_JWT agent requires a bearer token. Auto-fetch failed: ${err instanceof Error ? err.message : String(err)}\nProvide one manually with --bearer-token.`,
+        };
+      }
+    }
   }
 
   // MCP protocol handling
@@ -95,6 +112,7 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
       region: targetConfig.region,
       runtimeArn: agentState.runtimeArn,
       userId: options.userId,
+      headers: options.headers,
     };
 
     // list-tools: list available MCP tools
@@ -167,7 +185,12 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
   if (agentSpec.protocol === 'A2A') {
     try {
       const a2aResult = await invokeA2ARuntime(
-        { region: targetConfig.region, runtimeArn: agentState.runtimeArn, userId: options.userId },
+        {
+          region: targetConfig.region,
+          runtimeArn: agentState.runtimeArn,
+          userId: options.userId,
+          headers: options.headers,
+        },
         options.prompt
       );
       let response = '';
@@ -191,8 +214,8 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
     }
   }
 
-  // Get provider info if available
-  const providerInfo = agentSpec.modelProvider;
+  // modelProvider has been removed from schema
+  const providerInfo = undefined;
 
   // Create logger for this invocation
   const logger = new InvokeLogger({
@@ -213,7 +236,9 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
         payload: options.prompt,
         sessionId: options.sessionId,
         userId: options.userId,
-        logger, // Pass logger for SSE event debugging
+        logger,
+        headers: options.headers,
+        bearerToken: options.bearerToken,
       });
 
       for await (const chunk of result.stream) {
@@ -245,6 +270,8 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
     payload: options.prompt,
     sessionId: options.sessionId,
     userId: options.userId,
+    headers: options.headers,
+    bearerToken: options.bearerToken,
   });
 
   logger.logResponse(response.content);

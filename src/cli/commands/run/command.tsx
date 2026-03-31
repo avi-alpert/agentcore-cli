@@ -18,7 +18,24 @@ function formatRunOutput(result: Awaited<ReturnType<typeof handleRunEval>>): voi
     hour: '2-digit',
     minute: '2-digit',
   });
-  console.log(`\nAgent: ${run.agent} | ${date} | Sessions: ${run.sessionCount} | Lookback: ${run.lookbackDays}d\n`);
+  console.log(`\nAgent: ${run.agent} | ${date} | Sessions: ${run.sessionCount} | Lookback: ${run.lookbackDays}d`);
+
+  if (run.referenceInputs) {
+    const parts: string[] = [];
+    if (run.referenceInputs.assertions?.length) {
+      parts.push(`${run.referenceInputs.assertions.length} assertion(s)`);
+    }
+    if (run.referenceInputs.expectedResponse) {
+      parts.push('expected response');
+    }
+    if (run.referenceInputs.expectedTrajectory?.length) {
+      parts.push(`${run.referenceInputs.expectedTrajectory.length} trajectory step(s)`);
+    }
+    if (parts.length > 0) {
+      console.log(`Reference inputs: ${parts.join(', ')}`);
+    }
+  }
+  console.log('');
 
   for (const r of run.results) {
     const score = r.aggregateScore.toFixed(2);
@@ -37,31 +54,44 @@ export const registerRun = (program: Command) => {
 
   runCmd
     .command('eval')
-    .description('Run on-demand evaluation of agent traces. Use --agent-arn to evaluate agents outside the project.')
-    .option('-a, --agent <name>', 'Agent name from project config')
-    .option('--agent-arn <arn>', 'Agent runtime ARN — run outside a project directory')
+    .description(
+      'Run on-demand evaluation of runtime traces. Use --runtime-arn to evaluate runtimes outside the project.'
+    )
+    .option('-r, --runtime <name>', 'Runtime name from project config')
+    .option('--runtime-arn <arn>', 'Runtime ARN — run outside a project directory')
     .option('-e, --evaluator <names...>', 'Evaluator name(s) from project or Builtin.* IDs')
-    .option('--evaluator-arn <arns...>', 'Evaluator ARN(s) — use with --agent-arn for standalone mode')
-    .option('--region <region>', 'AWS region (required with --agent-arn, auto-detected otherwise)')
+    .option('--evaluator-arn <arns...>', 'Evaluator ARN(s) — use with --runtime-arn for standalone mode')
+    .option('--region <region>', 'AWS region (required with --runtime-arn, auto-detected otherwise)')
     .option('-s, --session-id <id>', 'Evaluate a specific session only')
     .option('-t, --trace-id <id>', 'Evaluate a specific trace only')
+    .option(
+      '--endpoint <name>',
+      'Runtime endpoint name (e.g. PROMPT_V1). Defaults to AGENTCORE_RUNTIME_ENDPOINT env var, then DEFAULT'
+    )
     .option('--days <days>', 'Lookback window in days', '7')
+    .option('-A, --assertion <text...>', 'Assertion the agent should satisfy (repeatable)')
+    .option('--expected-trajectory <names>', 'Expected tool calls in order (comma-separated)')
+    .option('--expected-response <text>', 'Expected agent response text')
     .option('--output <path>', 'Custom output file path for results')
     .option('--json', 'Output as JSON')
     .action(
       async (cliOptions: {
-        agent?: string;
-        agentArn?: string;
+        runtime?: string;
+        runtimeArn?: string;
         evaluator?: string[];
         evaluatorArn?: string[];
         region?: string;
         sessionId?: string;
         traceId?: string;
+        endpoint?: string;
+        assertion?: string[];
+        expectedTrajectory?: string;
+        expectedResponse?: string;
         days: string;
         output?: string;
         json?: boolean;
       }) => {
-        const isArnMode = !!(cliOptions.agentArn && cliOptions.evaluatorArn);
+        const isArnMode = !!(cliOptions.runtimeArn && cliOptions.evaluatorArn);
         if (!isArnMode) {
           requireProject();
         }
@@ -77,13 +107,19 @@ export const registerRun = (program: Command) => {
         }
 
         const options: RunEvalOptions = {
-          agent: cliOptions.agent,
-          agentArn: cliOptions.agentArn,
+          agent: cliOptions.runtime,
+          agentArn: cliOptions.runtimeArn,
           evaluator: cliOptions.evaluator ?? [],
           evaluatorArn: cliOptions.evaluatorArn,
           region: cliOptions.region,
           sessionId: cliOptions.sessionId,
           traceId: cliOptions.traceId,
+          endpoint: cliOptions.endpoint,
+          assertions: cliOptions.assertion,
+          expectedTrajectory: cliOptions.expectedTrajectory
+            ? cliOptions.expectedTrajectory.split(',').map(s => s.trim())
+            : undefined,
+          expectedResponse: cliOptions.expectedResponse,
           days: parseInt(cliOptions.days, 10),
           output: cliOptions.output,
           json: cliOptions.json,

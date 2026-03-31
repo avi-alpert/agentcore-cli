@@ -68,7 +68,7 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
 
     // Load targets and find the specified one
     startStep('Load deployment target');
-    const targets = await configIO.readAWSDeploymentTargets();
+    const targets = await configIO.resolveAWSDeploymentTargets();
     const target = targets.find(t => t.name === options.target);
     if (!target) {
       endStep('error', `Target "${options.target}" not found`);
@@ -364,7 +364,7 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
     // Get stack outputs and persist state
     startStep('Persist deployment state');
     const outputs = await getStackOutputs(target.region, stackName);
-    const agentNames = context.projectSpec.agents?.map(a => a.name) || [];
+    const agentNames = context.projectSpec.runtimes?.map(a => a.name) || [];
     const agents = parseAgentOutputs(outputs, agentNames, stackName);
 
     // Parse memory outputs

@@ -26,7 +26,8 @@ async function handleRemoveAll(_options: RemoveAllOptions): Promise<RemoveResult
     await configIO.writeProjectSpec({
       name: projectName,
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],
@@ -62,15 +63,15 @@ export const registerRemove = (program: Command): Command => {
   removeCommand
     .command('all')
     .description('Reset all agentcore schemas to empty state')
-    .option('--force', 'Skip confirmation prompts [non-interactive]')
+    .option('-y, --yes', 'Skip confirmation prompts [non-interactive]')
     .option('--dry-run', 'Show what would be reset without actually resetting [non-interactive]')
     .option('--json', 'Output as JSON [non-interactive]')
-    .action(async (cliOptions: { force?: boolean; dryRun?: boolean; json?: boolean }) => {
+    .action(async (cliOptions: { yes?: boolean; dryRun?: boolean; json?: boolean }) => {
       try {
         // Any flag triggers non-interactive CLI mode
-        if (cliOptions.force || cliOptions.dryRun || cliOptions.json) {
+        if (cliOptions.yes || cliOptions.dryRun || cliOptions.json) {
           await handleRemoveAllCLI({
-            force: cliOptions.force,
+            force: cliOptions.yes,
             dryRun: cliOptions.dryRun,
             json: cliOptions.json,
           });
@@ -95,7 +96,7 @@ export const registerRemove = (program: Command): Command => {
       }
     });
 
-  // Resource subcommands (agent, memory, identity, gateway, mcp-tool) are registered
+  // Resource subcommands (agent, memory, credential, gateway, mcp-tool) are registered
   // via primitive.registerCommands() in cli.ts
 
   // Catch-all for TUI fallback when no subcommand is specified.

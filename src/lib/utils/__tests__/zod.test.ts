@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 
 describe('validateAgentSchema', () => {
   const validAgent = {
-    type: 'AgentCoreRuntime',
     name: 'TestAgent',
     build: 'CodeZip',
     entrypoint: 'main.py',
@@ -40,7 +39,7 @@ describe('validateProjectSchema', () => {
   const validProject = {
     name: 'TestProject',
     version: 1,
-    agents: [],
+    runtimes: [],
     memories: [],
     credentials: [],
   };
@@ -53,7 +52,7 @@ describe('validateProjectSchema', () => {
 
   it('applies defaults for missing optional arrays', () => {
     const result = validateProjectSchema({ name: 'MyProject', version: 1 });
-    expect(result.agents).toEqual([]);
+    expect(result.runtimes).toEqual([]);
     expect(result.memories).toEqual([]);
     expect(result.credentials).toEqual([]);
   });
@@ -64,7 +63,6 @@ describe('validateProjectSchema', () => {
 
   it('throws for duplicate agent names', () => {
     const agent = {
-      type: 'AgentCoreRuntime',
       name: 'Same',
       build: 'CodeZip',
       entrypoint: 'main.py',
@@ -76,7 +74,7 @@ describe('validateProjectSchema', () => {
       validateProjectSchema({
         name: 'MyProject',
         version: 1,
-        agents: [agent, agent],
+        runtimes: [agent, agent],
       })
     ).toThrow('Invalid AgentCoreProjectSpec');
   });

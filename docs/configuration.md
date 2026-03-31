@@ -22,14 +22,14 @@ Main project configuration using a **flat resource model**. Agents, memories, an
 {
   "name": "MyProject",
   "version": 1,
-  "agents": [
+  "runtimes": [
     {
       "type": "AgentCoreRuntime",
       "name": "MyAgent",
       "build": "CodeZip",
       "entrypoint": "main.py",
       "codeLocation": "app/MyAgent/",
-      "runtimeVersion": "PYTHON_3_12"
+      "runtimeVersion": "PYTHON_3_13"
     }
   ],
   "memories": [
@@ -76,7 +76,7 @@ Main project configuration using a **flat resource model**. Agents, memories, an
 | `name`              | Yes      | Project name (1-23 chars, alphanumeric, starts with letter) |
 | `version`           | Yes      | Schema version (integer, currently `1`)                     |
 | `tags`              | No       | Project-level tags applied to all resources                 |
-| `agents`            | Yes      | Array of agent specifications                               |
+| `runtimes`          | Yes      | Array of agent specifications                               |
 | `memories`          | Yes      | Array of memory resources                                   |
 | `credentials`       | Yes      | Array of credential providers (API key or OAuth)            |
 | `evaluators`        | Yes      | Array of custom evaluator definitions                       |
@@ -112,7 +112,7 @@ You can add additional project-level tags by editing the `tags` field in `agentc
     "Team": "platform",
     "CostCenter": "engineering"
   },
-  "agents": [...],
+  "runtimes": [...],
   "memories": [...]
 }
 ```
@@ -132,7 +132,7 @@ resource-level value takes precedence for that specific resource.
     "Environment": "production",
     "Team": "platform"
   },
-  "agents": [
+  "runtimes": [
     {
       "type": "AgentCoreRuntime",
       "name": "MyAgent",
@@ -153,7 +153,7 @@ from project), and `Owner: alice` (resource-specific).
 
 The following resource types support tags:
 
-- **Agents** (`agents` array in `agentcore.json`)
+- **Agents** (`runtimes` array in `agentcore.json`)
 - **Memories** (`memories` array in `agentcore.json`)
 - **Gateways** (`agentCoreGateways` array in `agentcore.json`)
 - **Evaluators** (`evaluators` array in `agentcore.json`)
@@ -187,7 +187,7 @@ on the next deployment.
   "build": "CodeZip",
   "entrypoint": "main.py",
   "codeLocation": "app/MyAgent/",
-  "runtimeVersion": "PYTHON_3_12",
+  "runtimeVersion": "PYTHON_3_13",
   "networkMode": "PUBLIC",
   "envVars": [{ "name": "MY_VAR", "value": "my-value" }],
   "instrumentation": {
@@ -239,11 +239,12 @@ on the next deployment.
 
 ### Memory Strategies
 
-| Strategy          | Description                                         |
-| ----------------- | --------------------------------------------------- |
-| `SEMANTIC`        | Vector-based similarity search for relevant context |
-| `SUMMARIZATION`   | Compressed conversation history                     |
-| `USER_PREFERENCE` | Store user-specific preferences and settings        |
+| Strategy          | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `SEMANTIC`        | Vector-based similarity search for relevant context    |
+| `SUMMARIZATION`   | Compressed conversation history                        |
+| `USER_PREFERENCE` | Store user-specific preferences and settings           |
+| `EPISODIC`        | Capture and reflect on meaningful interaction episodes |
 
 Strategy configuration:
 
@@ -272,7 +273,7 @@ Strategy configuration:
 | Field  | Required | Description                         |
 | ------ | -------- | ----------------------------------- |
 | `type` | Yes      | Always `"ApiKeyCredentialProvider"` |
-| `name` | Yes      | Credential name (3-255 chars)       |
+| `name` | Yes      | Credential name (1-128 chars)       |
 
 ### OAuth Credential
 
@@ -288,7 +289,7 @@ Strategy configuration:
 | Field          | Required | Description                                            |
 | -------------- | -------- | ------------------------------------------------------ |
 | `type`         | Yes      | Always `"OAuthCredentialProvider"`                     |
-| `name`         | Yes      | Credential name (3-255 chars)                          |
+| `name`         | Yes      | Credential name (1-128 chars)                          |
 | `discoveryUrl` | Yes      | OIDC discovery URL (must be a valid URL)               |
 | `scopes`       | No       | Array of OAuth scopes                                  |
 | `vendor`       | No       | Credential provider vendor (default: `"CustomOauth2"`) |

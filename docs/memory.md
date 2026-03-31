@@ -149,19 +149,42 @@ async def invoke(payload, context):
     agentcore deploy
    ```
 
+## `--memory` Shorthand Mapping
+
+The `create` and `add agent` commands accept a `--memory` flag with one of three shorthand values. Each maps to a
+specific memory configuration:
+
+| Shorthand          | Strategies Created                                                                                                                                                                                                                                              |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `none`             | No memory resource created                                                                                                                                                                                                                                      |
+| `shortTerm`        | Memory with no strategies (session context via event expiry only, default 30 days)                                                                                                                                                                              |
+| `longAndShortTerm` | Memory with four strategies: `SEMANTIC` (`/users/{actorId}/facts`), `USER_PREFERENCE` (`/users/{actorId}/preferences`), `SUMMARIZATION` (`/summaries/{actorId}/{sessionId}`), `EPISODIC` (`/episodes/{actorId}/{sessionId}`, reflection: `/episodes/{actorId}`) |
+
+**Short-term memory** provides basic conversation context within a session — events are stored and expire after the
+configured duration, but no long-term extraction or search is performed.
+
+**Long-and-short-term memory** adds persistent strategies that extract facts, preferences, summaries, and episodes from
+conversations, enabling cross-session recall via semantic search.
+
 ## Memory Strategies
 
-| Strategy          | Description                                         |
-| ----------------- | --------------------------------------------------- |
-| `SEMANTIC`        | Vector-based similarity search for relevant context |
-| `SUMMARIZATION`   | Compressed conversation history                     |
-| `USER_PREFERENCE` | Store user-specific preferences and settings        |
+| Strategy          | Description                                            |
+| ----------------- | ------------------------------------------------------ |
+| `SEMANTIC`        | Vector-based similarity search for relevant context    |
+| `SUMMARIZATION`   | Compressed conversation history                        |
+| `USER_PREFERENCE` | Store user-specific preferences and settings           |
+| `EPISODIC`        | Capture and reflect on meaningful interaction episodes |
 
 You can combine multiple strategies:
 
 ```json
 {
-  "strategies": [{ "type": "SEMANTIC" }, { "type": "SUMMARIZATION" }, { "type": "USER_PREFERENCE" }]
+  "strategies": [
+    { "type": "SEMANTIC" },
+    { "type": "SUMMARIZATION" },
+    { "type": "USER_PREFERENCE" },
+    { "type": "EPISODIC" }
+  ]
 }
 ```
 
@@ -178,12 +201,13 @@ Each strategy can have optional configuration:
 }
 ```
 
-| Field         | Required | Description                                     |
-| ------------- | -------- | ----------------------------------------------- |
-| `type`        | Yes      | Strategy type                                   |
-| `name`        | No       | Custom name (defaults to `<memoryName>-<type>`) |
-| `description` | No       | Strategy description                            |
-| `namespaces`  | No       | Array of namespace paths for scoping            |
+| Field                  | Required      | Description                                                                 |
+| ---------------------- | ------------- | --------------------------------------------------------------------------- |
+| `type`                 | Yes           | Strategy type                                                               |
+| `name`                 | No            | Custom name (defaults to `<memoryName>-<type>`)                             |
+| `description`          | No            | Strategy description                                                        |
+| `namespaces`           | No            | Array of namespace paths for scoping                                        |
+| `reflectionNamespaces` | EPISODIC only | Namespaces for cross-episode reflections (must be a prefix of `namespaces`) |
 
 ## Event Expiry
 

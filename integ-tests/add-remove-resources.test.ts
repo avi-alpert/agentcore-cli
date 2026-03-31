@@ -36,6 +36,35 @@ describe('integration: add and remove resources', () => {
       expect(found, `Memory "${memoryName}" should be in config`).toBe(true);
     });
 
+    it('adds a memory with EPISODIC strategy and verifies reflectionNamespaces', async () => {
+      const episodicMemName = `EpiMem${Date.now().toString().slice(-6)}`;
+      const result = await runCLI(
+        ['add', 'memory', '--name', episodicMemName, '--strategies', 'EPISODIC', '--json'],
+        project.projectPath
+      );
+
+      expect(result.exitCode, `stdout: ${result.stdout}, stderr: ${result.stderr}`).toBe(0);
+      const json = JSON.parse(result.stdout);
+      expect(json.success).toBe(true);
+
+      // Verify EPISODIC in config with reflectionNamespaces
+      const config = await readProjectConfig(project.projectPath);
+      const memories = config.memories as {
+        name: string;
+        strategies: { type: string; reflectionNamespaces?: string[] }[];
+      }[];
+      const mem = memories.find(m => m.name === episodicMemName);
+      expect(mem, 'Memory should exist').toBeTruthy();
+
+      const episodic = mem!.strategies.find(s => s.type === 'EPISODIC');
+      expect(episodic, 'EPISODIC strategy should exist').toBeTruthy();
+      expect(episodic!.reflectionNamespaces, 'Should have reflectionNamespaces').toBeDefined();
+      expect(episodic!.reflectionNamespaces!.length).toBeGreaterThan(0);
+
+      // Clean up
+      await runCLI(['remove', 'memory', '--name', episodicMemName, '--json'], project.projectPath);
+    });
+
     it('removes the memory resource', async () => {
       const result = await runCLI(['remove', 'memory', '--name', memoryName, '--json'], project.projectPath);
 
@@ -51,12 +80,12 @@ describe('integration: add and remove resources', () => {
     });
   });
 
-  describe('identity lifecycle', () => {
-    const identityName = `IntegId${Date.now().toString().slice(-6)}`;
+  describe('credential lifecycle', () => {
+    const credentialName = `IntegId${Date.now().toString().slice(-6)}`;
 
-    it('adds an identity resource', async () => {
+    it('adds a credential resource', async () => {
       const result = await runCLI(
-        ['add', 'identity', '--name', identityName, '--api-key', 'test-key-integ-123', '--json'],
+        ['add', 'credential', '--name', credentialName, '--api-key', 'test-key-integ-123', '--json'],
         project.projectPath
       );
 
@@ -68,12 +97,12 @@ describe('integration: add and remove resources', () => {
       const config = await readProjectConfig(project.projectPath);
       const credentials = config.credentials as Record<string, unknown>[] | undefined;
       expect(credentials, 'credentials should exist').toBeDefined();
-      const found = credentials!.some((c: Record<string, unknown>) => c.name === identityName);
-      expect(found, `Identity "${identityName}" should be in config`).toBe(true);
+      const found = credentials!.some((c: Record<string, unknown>) => c.name === credentialName);
+      expect(found, `Credential "${credentialName}" should be in config`).toBe(true);
     });
 
-    it('removes the identity resource', async () => {
-      const result = await runCLI(['remove', 'identity', '--name', identityName, '--json'], project.projectPath);
+    it('removes the credential resource', async () => {
+      const result = await runCLI(['remove', 'credential', '--name', credentialName, '--json'], project.projectPath);
 
       expect(result.exitCode, `stdout: ${result.stdout}, stderr: ${result.stderr}`).toBe(0);
       const json = JSON.parse(result.stdout);
@@ -82,8 +111,8 @@ describe('integration: add and remove resources', () => {
       // Verify config updated
       const config = await readProjectConfig(project.projectPath);
       const credentials = (config.credentials as Record<string, unknown>[] | undefined) ?? [];
-      const found = credentials.some((c: Record<string, unknown>) => c.name === identityName);
-      expect(found, `Identity "${identityName}" should be removed from config`).toBe(false);
+      const found = credentials.some((c: Record<string, unknown>) => c.name === credentialName);
+      expect(found, `Credential "${credentialName}" should be removed from config`).toBe(false);
     });
   });
 });

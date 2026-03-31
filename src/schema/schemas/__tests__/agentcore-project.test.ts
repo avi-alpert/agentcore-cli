@@ -110,7 +110,6 @@ describe('MemoryNameSchema', () => {
 describe('MemorySchema', () => {
   it('accepts valid memory with strategies', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'TestMemory',
       eventExpiryDuration: 30,
       strategies: [{ type: 'SEMANTIC' }],
@@ -120,7 +119,6 @@ describe('MemorySchema', () => {
 
   it('accepts memory with empty strategies (short-term only)', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'ShortTermOnly',
       eventExpiryDuration: 7,
       strategies: [],
@@ -130,7 +128,6 @@ describe('MemorySchema', () => {
 
   it('defaults strategies to empty array', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'NoStrategies',
       eventExpiryDuration: 30,
     });
@@ -142,7 +139,6 @@ describe('MemorySchema', () => {
 
   it('rejects eventExpiryDuration below 7', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'Test',
       eventExpiryDuration: 6,
       strategies: [],
@@ -152,7 +148,6 @@ describe('MemorySchema', () => {
 
   it('rejects eventExpiryDuration above 365', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'Test',
       eventExpiryDuration: 366,
       strategies: [],
@@ -163,7 +158,6 @@ describe('MemorySchema', () => {
   it('accepts eventExpiryDuration boundary values (7 and 365)', () => {
     expect(
       MemorySchema.safeParse({
-        type: 'AgentCoreMemory',
         name: 'Min',
         eventExpiryDuration: 7,
         strategies: [],
@@ -172,7 +166,6 @@ describe('MemorySchema', () => {
 
     expect(
       MemorySchema.safeParse({
-        type: 'AgentCoreMemory',
         name: 'Max',
         eventExpiryDuration: 365,
         strategies: [],
@@ -182,7 +175,6 @@ describe('MemorySchema', () => {
 
   it('rejects non-integer eventExpiryDuration', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'Test',
       eventExpiryDuration: 30.5,
       strategies: [],
@@ -192,7 +184,6 @@ describe('MemorySchema', () => {
 
   it('rejects duplicate strategy types', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'Test',
       eventExpiryDuration: 30,
       strategies: [{ type: 'SEMANTIC' }, { type: 'SEMANTIC' }],
@@ -202,39 +193,36 @@ describe('MemorySchema', () => {
 
   it('accepts multiple different strategy types', () => {
     const result = MemorySchema.safeParse({
-      type: 'AgentCoreMemory',
       name: 'Test',
       eventExpiryDuration: 30,
       strategies: [{ type: 'SEMANTIC' }, { type: 'SUMMARIZATION' }, { type: 'USER_PREFERENCE' }],
     });
     expect(result.success).toBe(true);
   });
-
-  it('rejects invalid type literal', () => {
-    const result = MemorySchema.safeParse({
-      type: 'InvalidType',
-      name: 'Test',
-      eventExpiryDuration: 30,
-      strategies: [],
-    });
-    expect(result.success).toBe(false);
-  });
 });
 
 describe('CredentialNameSchema', () => {
   it('accepts valid credential names', () => {
     expect(CredentialNameSchema.safeParse('MyProjectGemini').success).toBe(true);
-    expect(CredentialNameSchema.safeParse('api-key.v2').success).toBe(true);
+    expect(CredentialNameSchema.safeParse('api-key-v2').success).toBe(true);
     expect(CredentialNameSchema.safeParse('my_cred_123').success).toBe(true);
   });
 
-  it('rejects names shorter than 3 characters', () => {
-    expect(CredentialNameSchema.safeParse('ab').success).toBe(false);
-    expect(CredentialNameSchema.safeParse('a').success).toBe(false);
+  it('accepts single character name (min 1)', () => {
+    expect(CredentialNameSchema.safeParse('a').success).toBe(true);
   });
 
-  it('accepts name with exactly 3 characters', () => {
-    expect(CredentialNameSchema.safeParse('abc').success).toBe(true);
+  it('rejects empty name', () => {
+    expect(CredentialNameSchema.safeParse('').success).toBe(false);
+  });
+
+  it('rejects names longer than 128 characters', () => {
+    expect(CredentialNameSchema.safeParse('a'.repeat(128)).success).toBe(true);
+    expect(CredentialNameSchema.safeParse('a'.repeat(129)).success).toBe(false);
+  });
+
+  it('rejects names with dots', () => {
+    expect(CredentialNameSchema.safeParse('api-key.v2').success).toBe(false);
   });
 
   it('rejects names with spaces', () => {
@@ -250,7 +238,7 @@ describe('CredentialNameSchema', () => {
 describe('CredentialSchema', () => {
   it('accepts valid credential', () => {
     const result = CredentialSchema.safeParse({
-      type: 'ApiKeyCredentialProvider',
+      authorizerType: 'ApiKeyCredentialProvider',
       name: 'MyCredential',
     });
     expect(result.success).toBe(true);
@@ -258,7 +246,7 @@ describe('CredentialSchema', () => {
 
   it('rejects invalid type', () => {
     const result = CredentialSchema.safeParse({
-      type: 'OAuthProvider',
+      authorizerType: 'OAuthProvider',
       name: 'MyCredential',
     });
     expect(result.success).toBe(false);
@@ -266,7 +254,7 @@ describe('CredentialSchema', () => {
 
   it('ApiKeyCredentialProvider with name passes', () => {
     const result = CredentialSchema.safeParse({
-      type: 'ApiKeyCredentialProvider',
+      authorizerType: 'ApiKeyCredentialProvider',
       name: 'MyApiKey',
     });
     expect(result.success).toBe(true);
@@ -274,7 +262,7 @@ describe('CredentialSchema', () => {
 
   it('OAuthCredentialProvider with name and discoveryUrl passes', () => {
     const result = CredentialSchema.safeParse({
-      type: 'OAuthCredentialProvider',
+      authorizerType: 'OAuthCredentialProvider',
       name: 'MyOAuth',
       discoveryUrl: 'https://example.com/.well-known/openid-configuration',
     });
@@ -283,24 +271,24 @@ describe('CredentialSchema', () => {
 
   it('OAuthCredentialProvider with scopes omitted passes', () => {
     const result = CredentialSchema.safeParse({
-      type: 'OAuthCredentialProvider',
+      authorizerType: 'OAuthCredentialProvider',
       name: 'MyOAuth',
       discoveryUrl: 'https://example.com/.well-known/openid-configuration',
     });
     expect(result.success).toBe(true);
   });
 
-  it('OAuthCredentialProvider without discoveryUrl fails', () => {
+  it('OAuthCredentialProvider without discoveryUrl succeeds (optional for imported providers)', () => {
     const result = CredentialSchema.safeParse({
-      type: 'OAuthCredentialProvider',
+      authorizerType: 'OAuthCredentialProvider',
       name: 'MyOAuth',
     });
-    expect(result.success).toBe(false);
+    expect(result.success).toBe(true);
   });
 
   it('invalid type fails discriminated union', () => {
     const result = CredentialSchema.safeParse({
-      type: 'InvalidCredentialType',
+      authorizerType: 'InvalidCredentialType',
       name: 'MyCred',
     });
     expect(result.success).toBe(false);
@@ -308,12 +296,12 @@ describe('CredentialSchema', () => {
 
   it('vendor defaults to CustomOauth2', () => {
     const result = CredentialSchema.safeParse({
-      type: 'OAuthCredentialProvider',
+      authorizerType: 'OAuthCredentialProvider',
       name: 'MyOAuth',
       discoveryUrl: 'https://example.com/.well-known/openid-configuration',
     });
     expect(result.success).toBe(true);
-    if (result.success && result.data.type === 'OAuthCredentialProvider') {
+    if (result.success && result.data.authorizerType === 'OAuthCredentialProvider') {
       expect(result.data.vendor).toBe('CustomOauth2');
     }
   });
@@ -329,7 +317,7 @@ describe('AgentCoreProjectSpecSchema', () => {
     const result = AgentCoreProjectSpecSchema.safeParse(minimalProject);
     expect(result.success).toBe(true);
     if (result.success) {
-      expect(result.data.agents).toEqual([]);
+      expect(result.data.runtimes).toEqual([]);
       expect(result.data.memories).toEqual([]);
       expect(result.data.credentials).toEqual([]);
     }
@@ -338,9 +326,8 @@ describe('AgentCoreProjectSpecSchema', () => {
   it('accepts project with agents', () => {
     const result = AgentCoreProjectSpecSchema.safeParse({
       ...minimalProject,
-      agents: [
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'MyAgent',
           build: 'CodeZip',
           entrypoint: 'main.py',
@@ -355,7 +342,6 @@ describe('AgentCoreProjectSpecSchema', () => {
 
   it('rejects duplicate agent names', () => {
     const agent = {
-      type: 'AgentCoreRuntime',
       name: 'MyAgent',
       build: 'CodeZip',
       entrypoint: 'main.py',
@@ -365,7 +351,7 @@ describe('AgentCoreProjectSpecSchema', () => {
     };
     const result = AgentCoreProjectSpecSchema.safeParse({
       ...minimalProject,
-      agents: [agent, agent],
+      runtimes: [agent, agent],
     });
     expect(result.success).toBe(false);
     if (!result.success) {
@@ -375,7 +361,6 @@ describe('AgentCoreProjectSpecSchema', () => {
 
   it('rejects duplicate memory names', () => {
     const memory = {
-      type: 'AgentCoreMemory',
       name: 'SharedMemory',
       eventExpiryDuration: 30,
       strategies: [],
@@ -392,7 +377,7 @@ describe('AgentCoreProjectSpecSchema', () => {
 
   it('rejects duplicate credential names', () => {
     const cred = {
-      type: 'ApiKeyCredentialProvider',
+      authorizerType: 'ApiKeyCredentialProvider',
       name: 'MyCred',
     };
     const result = AgentCoreProjectSpecSchema.safeParse({
@@ -409,9 +394,8 @@ describe('AgentCoreProjectSpecSchema', () => {
     const result = AgentCoreProjectSpecSchema.safeParse({
       name: 'FullProject',
       version: 1,
-      agents: [
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'CodeZip',
           entrypoint: 'main.py',
@@ -420,7 +404,6 @@ describe('AgentCoreProjectSpecSchema', () => {
           protocol: 'HTTP',
         },
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent2',
           build: 'Container',
           entrypoint: 'index.ts',
@@ -431,18 +414,35 @@ describe('AgentCoreProjectSpecSchema', () => {
       ],
       memories: [
         {
-          type: 'AgentCoreMemory',
           name: 'Memory1',
           eventExpiryDuration: 30,
           strategies: [{ type: 'SEMANTIC' }],
         },
       ],
       credentials: [
-        { type: 'ApiKeyCredentialProvider', name: 'Cred1' },
-        { type: 'ApiKeyCredentialProvider', name: 'Cred2' },
+        { authorizerType: 'ApiKeyCredentialProvider', name: 'Cred1' },
+        { authorizerType: 'ApiKeyCredentialProvider', name: 'Cred2' },
       ],
     });
     expect(result.success).toBe(true);
+  });
+
+  it('defaults managedBy to CDK when omitted', () => {
+    const result = AgentCoreProjectSpecSchema.safeParse(minimalProject);
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.data.managedBy).toBe('CDK');
+    }
+  });
+
+  it('accepts explicit managedBy: CDK', () => {
+    const result = AgentCoreProjectSpecSchema.safeParse({ ...minimalProject, managedBy: 'CDK' });
+    expect(result.success).toBe(true);
+  });
+
+  it('rejects invalid managedBy value', () => {
+    const result = AgentCoreProjectSpecSchema.safeParse({ ...minimalProject, managedBy: 'Terraform' });
+    expect(result.success).toBe(false);
   });
 
   it('rejects non-integer version', () => {

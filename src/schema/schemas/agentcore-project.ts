@@ -10,7 +10,12 @@ import { isReservedProjectName } from '../constants';
 import { AgentEnvSpecSchema } from './agent-env';
 import { AgentCoreGatewaySchema, AgentCoreGatewayTargetSchema, AgentCoreMcpRuntimeToolSchema } from './mcp';
 import { EvaluationLevelSchema, EvaluatorConfigSchema, EvaluatorNameSchema } from './primitives/evaluator';
-import { DEFAULT_STRATEGY_NAMESPACES, MemoryStrategySchema, MemoryStrategyTypeSchema } from './primitives/memory';
+import {
+  DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
+  DEFAULT_STRATEGY_NAMESPACES,
+  MemoryStrategySchema,
+  MemoryStrategyTypeSchema,
+} from './primitives/memory';
 import { OnlineEvalConfigSchema } from './primitives/online-eval-config';
 import { PolicyEngineSchema } from './primitives/policy';
 import { TagsSchema } from './primitives/tags';
@@ -18,7 +23,12 @@ import { uniqueBy } from './zod-util';
 import { z } from 'zod';
 
 // Re-export for convenience
-export { DEFAULT_STRATEGY_NAMESPACES, MemoryStrategySchema, MemoryStrategyTypeSchema };
+export {
+  DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
+  DEFAULT_STRATEGY_NAMESPACES,
+  MemoryStrategySchema,
+  MemoryStrategyTypeSchema,
+};
 export { EvaluationLevelSchema };
 export type { MemoryStrategy, MemoryStrategyType } from './primitives/memory';
 export type { OnlineEvalConfig } from './primitives/online-eval-config';
@@ -31,6 +41,13 @@ export { PolicyEngineNameSchema, PolicyNameSchema, PolicySchema, ValidationModeS
 export { TagsSchema };
 export type { Tags } from './primitives/tags';
 
+// ============================================================================
+// ManagedBy Schema
+// ============================================================================
+
+export const ManagedBySchema = z.enum(['CDK']).default('CDK');
+export type ManagedBy = z.infer<typeof ManagedBySchema>;
+
 // Re-export MCP types (now part of unified schema)
 export type { AgentCoreGateway, AgentCoreGatewayTarget, AgentCoreMcpRuntimeTool } from './mcp';
 export { AgentCoreGatewaySchema, AgentCoreGatewayTargetSchema, AgentCoreMcpRuntimeToolSchema } from './mcp';
@@ -39,6 +56,8 @@ export { AgentCoreGatewaySchema, AgentCoreGatewayTargetSchema, AgentCoreMcpRunti
 // Project Name Schema
 // ============================================================================
 
+// Project name is a CLI-only concept (combined with agent name to form the runtime name).
+// Max 23 so that projectName + "_" + agentName fits within the 48-char runtime name limit.
 export const ProjectNameSchema = z
   .string()
   .min(1, 'Project name is required')
@@ -58,6 +77,8 @@ export const ProjectNameSchema = z
 export const MemoryTypeSchema = z.literal('AgentCoreMemory');
 export type MemoryType = z.infer<typeof MemoryTypeSchema>;
 
+// Memory names follow the same constraints as agent runtime names.
+// https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_CreateMemory.html
 export const MemoryNameSchema = z
   .string()
   .min(1, 'Name is required')
@@ -68,7 +89,6 @@ export const MemoryNameSchema = z
   );
 
 export const MemorySchema = z.object({
-  type: MemoryTypeSchema,
   name: MemoryNameSchema,
   eventExpiryDuration: z.number().int().min(7).max(365),
   // Strategies array can be empty for short-term memory (just base memory with expiration)
@@ -91,30 +111,28 @@ export type Memory = z.infer<typeof MemorySchema>;
 // Credential Schema
 // ============================================================================
 
+// https://docs.aws.amazon.com/bedrock-agentcore-control/latest/APIReference/API_CreateApiKeyCredentialProvider.html
 export const CredentialNameSchema = z
   .string()
-  .min(3, 'Credential name must be at least 3 characters')
-  .max(255)
-  .regex(
-    /^[A-Za-z0-9_.-]+$/,
-    'Must contain only alphanumeric characters, underscores, dots, and hyphens (3-255 chars)'
-  );
+  .min(1, 'Credential name is required')
+  .max(128, 'Credential name must be 128 characters or less')
+  .regex(/^[a-zA-Z0-9\-_]+$/, 'Must contain only alphanumeric characters, hyphens, and underscores (1-128 chars)');
 
 export const CredentialTypeSchema = z.enum(['ApiKeyCredentialProvider', 'OAuthCredentialProvider']);
 export type CredentialType = z.infer<typeof CredentialTypeSchema>;
 
 export const ApiKeyCredentialSchema = z.object({
-  type: z.literal('ApiKeyCredentialProvider'),
+  authorizerType: z.literal('ApiKeyCredentialProvider'),
   name: CredentialNameSchema,
 });
 
 export type ApiKeyCredential = z.infer<typeof ApiKeyCredentialSchema>;
 
 export const OAuthCredentialSchema = z.object({
-  type: z.literal('OAuthCredentialProvider'),
+  authorizerType: z.literal('OAuthCredentialProvider'),
   name: CredentialNameSchema,
-  /** OIDC discovery URL for the OAuth provider */
-  discoveryUrl: z.string().url(),
+  /** OIDC discovery URL for the OAuth provider (optional for imported providers that already exist in Identity service) */
+  discoveryUrl: z.string().url().optional(),
   /** Scopes this credential provider supports */
   scopes: z.array(z.string()).optional(),
   /** Credential provider vendor type */
@@ -127,7 +145,7 @@ export const OAuthCredentialSchema = z.object({
 
 export type OAuthCredential = z.infer<typeof OAuthCredentialSchema>;
 
-export const CredentialSchema = z.discriminatedUnion('type', [ApiKeyCredentialSchema, OAuthCredentialSchema]);
+export const CredentialSchema = z.discriminatedUnion('authorizerType', [ApiKeyCredentialSchema, OAuthCredentialSchema]);
 
 export type Credential = z.infer<typeof CredentialSchema>;
 
@@ -139,7 +157,6 @@ export const EvaluatorTypeSchema = z.literal('CustomEvaluator');
 export type EvaluatorType = z.infer<typeof EvaluatorTypeSchema>;
 
 export const EvaluatorSchema = z.object({
-  type: EvaluatorTypeSchema,
   name: EvaluatorNameSchema,
   level: EvaluationLevelSchema,
   description: z.string().optional(),
@@ -158,11 +175,13 @@ const ARN_PREFIX = 'arn:';
 
 export const AgentCoreProjectSpecSchema = z
   .object({
+    $schema: z.string().optional(),
     name: ProjectNameSchema,
-    version: z.number().int(),
+    version: z.number().int().min(1),
+    managedBy: ManagedBySchema,
     tags: TagsSchema.optional(),
 
-    agents: z
+    runtimes: z
       .array(AgentEnvSpecSchema)
       .default([])
       .superRefine(
@@ -257,7 +276,7 @@ export const AgentCoreProjectSpecSchema = z
   })
   .strict()
   .superRefine((spec, ctx) => {
-    const agentNames = new Set(spec.agents.map(a => a.name));
+    const agentNames = new Set(spec.runtimes.map(a => a.name));
     const evaluatorNames = new Set(spec.evaluators.map(e => e.name));
 
     for (const config of spec.onlineEvalConfigs) {

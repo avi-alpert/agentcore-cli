@@ -1,9 +1,9 @@
 export interface LogsOptions {
-  agent?: string;
+  runtime?: string;
   since?: string;
   until?: string;
   level?: string;
-  lines?: string;
+  limit?: string;
   query?: string;
   json?: boolean;
 }

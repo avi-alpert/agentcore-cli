@@ -42,7 +42,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with protocol
 
     // Verify config has protocol set to MCP
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents).toBeDefined();
     expect(agents.length).toBe(1);
     expect(agents[0]!.name).toBe(agentName);
@@ -87,7 +87,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with protocol
 
     // Verify config has protocol set to A2A
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents.length).toBe(1);
     expect(agents[0]!.protocol).toBe('A2A');
   });
@@ -118,7 +118,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with protocol
 
     // Verify config has explicit protocol: HTTP
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents.length).toBe(1);
     expect(agents[0]!.protocol).toBe('HTTP');
   });
@@ -137,31 +137,6 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with protocol
     const name = `McpFw${Date.now().toString().slice(-6)}`;
     const result = await runCLI(
       ['create', '--name', name, '--language', 'Python', '--protocol', 'MCP', '--framework', 'Strands', '--json'],
-      testDir
-    );
-
-    expect(result.exitCode).not.toBe(0);
-  });
-
-  it('rejects A2A with unsupported framework (CrewAI)', async () => {
-    const name = `A2aCrew${Date.now().toString().slice(-6)}`;
-    const result = await runCLI(
-      [
-        'create',
-        '--name',
-        name,
-        '--language',
-        'Python',
-        '--protocol',
-        'A2A',
-        '--framework',
-        'CrewAI',
-        '--model-provider',
-        'Bedrock',
-        '--memory',
-        'none',
-        '--json',
-      ],
       testDir
     );
 
@@ -200,7 +175,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: add agent with proto
     expect(json.success).toBe(true);
 
     const config = await readProjectConfig(projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     const mcpAgent = agents.find(a => a.name === name);
     expect(mcpAgent).toBeDefined();
     expect(mcpAgent!.protocol).toBe('MCP');
@@ -234,7 +209,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: add agent with proto
     expect(json.success).toBe(true);
 
     const config = await readProjectConfig(projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     const a2aAgent = agents.find(a => a.name === name);
     expect(a2aAgent).toBeDefined();
     expect(a2aAgent!.protocol).toBe('A2A');
@@ -266,7 +241,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: add agent with proto
     expect(json.success).toBe(true);
 
     const config = await readProjectConfig(projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     const byoAgent = agents.find(a => a.name === name);
     expect(byoAgent).toBeDefined();
     expect(byoAgent!.protocol).toBe('MCP');

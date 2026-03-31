@@ -9,6 +9,7 @@ import {
   writeAgentToProject,
 } from '../../../operations/agent/generate';
 import { executeImportAgent } from '../../../operations/agent/import';
+import { buildAuthorizerConfigFromJwtConfig, createManagedOAuthCredential } from '../../../primitives/auth-utils';
 import { computeDefaultCredentialEnvVarName } from '../../../primitives/credential-utils';
 import { credentialPrimitive } from '../../../primitives/registry';
 import { createRenderer } from '../../../templates';
@@ -55,7 +56,6 @@ export type AddAgentOutcome = AddAgentCreateResult | AddAgentByoResult | AddAgen
 export function mapByoConfigToAgent(config: AddAgentConfig): AgentEnvSpec {
   const networkMode = config.networkMode ?? 'PUBLIC';
   return {
-    type: 'AgentCoreRuntime',
     name: config.name,
     build: config.buildType,
     entrypoint: config.entrypoint as FilePath,
@@ -74,6 +74,21 @@ export function mapByoConfigToAgent(config: AddAgentConfig): AgentEnvSpec {
     ...(config.requestHeaderAllowlist?.length && {
       requestHeaderAllowlist: config.requestHeaderAllowlist,
     }),
+    ...(config.authorizerType && { authorizerType: config.authorizerType }),
+    ...(config.authorizerType === 'CUSTOM_JWT' &&
+      config.jwtConfig && {
+        authorizerConfiguration: buildAuthorizerConfigFromJwtConfig(config.jwtConfig),
+      }),
+    ...(config.idleRuntimeSessionTimeout !== undefined || config.maxLifetime !== undefined
+      ? {
+          lifecycleConfiguration: {
+            ...(config.idleRuntimeSessionTimeout !== undefined && {
+              idleRuntimeSessionTimeout: config.idleRuntimeSessionTimeout,
+            }),
+            ...(config.maxLifetime !== undefined && { maxLifetime: config.maxLifetime }),
+          },
+        }
+      : {}),
   };
 }
 
@@ -93,6 +108,10 @@ function mapAddAgentConfigToGenerateConfig(config: AddAgentConfig): GenerateConf
     subnets: config.subnets,
     securityGroups: config.securityGroups,
     requestHeaderAllowlist: config.requestHeaderAllowlist,
+    authorizerType: config.authorizerType,
+    jwtConfig: config.jwtConfig,
+    idleRuntimeSessionTimeout: config.idleRuntimeSessionTimeout,
+    maxLifetime: config.maxLifetime,
   };
 }
 
@@ -123,7 +142,7 @@ export function useAddAgent() {
 
       // Check for duplicate agent name
       const project = await configIO.readProjectSpec();
-      const existingAgent = project.agents.find(agent => agent.name === config.name);
+      const existingAgent = project.runtimes.find(agent => agent.name === config.name);
       if (existingAgent) {
         return { ok: false, error: `Agent "${config.name}" already exists in this project.` };
       }
@@ -207,6 +226,16 @@ async function handleCreatePath(
     await writeAgentToProject(generateConfig, { configBaseDir });
   }
 
+  // Auto-create OAuth credential for CUSTOM_JWT inbound auth
+  if (config.authorizerType === 'CUSTOM_JWT' && config.jwtConfig?.clientId && config.jwtConfig?.clientSecret) {
+    await createManagedOAuthCredential(
+      config.name,
+      config.jwtConfig,
+      spec => configIO.writeProjectSpec(spec),
+      () => configIO.readProjectSpec()
+    );
+  }
+
   // Set up Python environment if applicable
   let pythonSetupResult: PythonSetupResult | undefined;
   if (config.language === 'Python') {
@@ -243,6 +272,10 @@ async function handleImportPath(
     bedrockAgentId: config.bedrockAgentId!,
     bedrockAliasId: config.bedrockAliasId!,
     configBaseDir,
+    authorizerType: config.authorizerType,
+    jwtConfig: config.jwtConfig,
+    idleTimeout: config.idleRuntimeSessionTimeout,
+    maxLifetime: config.maxLifetime,
   });
 
   if (!result.success) {
@@ -275,7 +308,7 @@ async function handleByoPath(
   const agent = mapByoConfigToAgent(config);
 
   // Append new agent
-  project.agents.push(agent);
+  project.runtimes.push(agent);
 
   // Handle credential creation with smart reuse detection
   if (config.modelProvider !== 'Bedrock') {
@@ -307,6 +340,16 @@ async function handleByoPath(
   } else {
     // Bedrock: no credentials needed
     await configIO.writeProjectSpec(project);
+  }
+
+  // Auto-create OAuth credential for CUSTOM_JWT inbound auth
+  if (config.authorizerType === 'CUSTOM_JWT' && config.jwtConfig?.clientId && config.jwtConfig?.clientSecret) {
+    await createManagedOAuthCredential(
+      config.name,
+      config.jwtConfig,
+      spec => configIO.writeProjectSpec(spec),
+      () => configIO.readProjectSpec()
+    );
   }
 
   return { ok: true, type: 'byo', agentName: config.name, projectName: project.name };

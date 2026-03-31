@@ -78,6 +78,13 @@ describe('add gateway command', () => {
     });
   });
 
+  describe('rejected flags', () => {
+    it('rejects unknown --agents flag', async () => {
+      const result = await runCLI(['add', 'gateway', '--name', 'agents-test', '--agents', 'foo', '--json'], projectDir);
+      expect(result.exitCode).toBe(1);
+    });
+  });
+
   describe('JWT authorizer', () => {
     it('creates gateway with CUSTOM_JWT authorizer', async () => {
       const gatewayName = `jwt-gw-${Date.now()}`;
@@ -190,7 +197,7 @@ describe('add gateway command', () => {
       // Verify managed OAuth credential in agentcore.json
       const credential = projectSpec.credentials.find((c: { name: string }) => c.name === `${gatewayName}-oauth`);
       expect(credential, 'Managed OAuth credential should exist').toBeTruthy();
-      expect(credential.type).toBe('OAuthCredentialProvider');
+      expect(credential.authorizerType).toBe('OAuthCredentialProvider');
       expect(credential.managed).toBe(true);
       expect(credential.usage).toBe('inbound');
     });

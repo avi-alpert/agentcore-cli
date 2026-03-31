@@ -8,7 +8,8 @@ test('AgentCoreStack synthesizes with empty spec', () => {
     spec: {
       name: 'testproject',
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],

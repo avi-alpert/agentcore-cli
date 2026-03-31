@@ -1,4 +1,11 @@
-import type { GatewayAuthorizerType, ModelProvider, ProtocolMode, SDKFramework, TargetLanguage } from '../../../schema';
+import type {
+  GatewayAuthorizerType,
+  ModelProvider,
+  ProtocolMode,
+  RuntimeAuthorizerType,
+  SDKFramework,
+  TargetLanguage,
+} from '../../../schema';
 import type { MemoryOption } from '../../tui/screens/generate/types';
 import type { VpcOptions } from '../shared/vpc-utils';
 
@@ -18,6 +25,16 @@ export interface AddAgentOptions extends VpcOptions {
   agentId?: string;
   agentAliasId?: string;
   region?: string;
+  authorizerType?: RuntimeAuthorizerType;
+  discoveryUrl?: string;
+  allowedAudience?: string;
+  allowedClients?: string;
+  allowedScopes?: string;
+  customClaims?: string;
+  clientId?: string;
+  clientSecret?: string;
+  idleTimeout?: number | string;
+  maxLifetime?: number | string;
   json?: boolean;
 }
 
@@ -40,7 +57,7 @@ export interface AddGatewayOptions {
   customClaims?: string;
   clientId?: string;
   clientSecret?: string;
-  agents?: string;
+  runtimes?: string;
   semanticSearch?: boolean;
   exceptionLevel?: string;
   policyEngine?: string;
@@ -101,8 +118,8 @@ export interface AddMemoryResult {
   error?: string;
 }
 
-// Identity types (v2: credential, no owner/user concept)
-export interface AddIdentityOptions {
+// Credential types (v2: credential, no owner/user concept)
+export interface AddCredentialOptions {
   name?: string;
   type?: 'api-key' | 'oauth';
   apiKey?: string;
@@ -113,7 +130,10 @@ export interface AddIdentityOptions {
   json?: boolean;
 }
 
-export interface AddIdentityResult {
+/** @deprecated Use AddCredentialOptions */
+export type AddIdentityOptions = AddCredentialOptions;
+
+export interface AddCredentialResult {
   success: boolean;
   credentialName?: string;
   error?: string;

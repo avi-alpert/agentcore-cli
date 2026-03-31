@@ -31,7 +31,8 @@ vi.mock('../../../logging', () => {
 const baseProject: AgentCoreProjectSpec = {
   name: 'test-project',
   version: 1,
-  agents: [],
+  managedBy: 'CDK' as const,
+  runtimes: [],
   memories: [],
   credentials: [],
 } as unknown as AgentCoreProjectSpec;
@@ -45,11 +46,11 @@ describe('computeResourceStatuses', () => {
   it('marks agent as deployed when in both local and deployed state', () => {
     const project = {
       ...baseProject,
-      agents: [{ name: 'my-agent' }],
+      runtimes: [{ name: 'my-agent' }],
     } as unknown as AgentCoreProjectSpec;
 
     const resources: DeployedResourceState = {
-      agents: {
+      runtimes: {
         'my-agent': {
           runtimeId: 'rt-123',
           runtimeArn: 'arn:aws:bedrock:us-east-1:123456789:agent-runtime/rt-123',
@@ -69,7 +70,7 @@ describe('computeResourceStatuses', () => {
   it('marks agent as local-only when not in deployed state', () => {
     const project = {
       ...baseProject,
-      agents: [{ name: 'my-agent' }],
+      runtimes: [{ name: 'my-agent' }],
     } as unknown as AgentCoreProjectSpec;
 
     const result = computeResourceStatuses(project, undefined);
@@ -82,7 +83,7 @@ describe('computeResourceStatuses', () => {
 
   it('marks agent as pending-removal when in deployed state but not in local schema', () => {
     const resources: DeployedResourceState = {
-      agents: {
+      runtimes: {
         'removed-agent': {
           runtimeId: 'rt-456',
           runtimeArn: 'arn:aws:bedrock:us-east-1:123456789:agent-runtime/rt-456',
@@ -102,7 +103,7 @@ describe('computeResourceStatuses', () => {
   it('marks credential as deployed when in both local and deployed state', () => {
     const project = {
       ...baseProject,
-      credentials: [{ name: 'my-cred', type: 'OAuthCredentialProvider' }],
+      credentials: [{ name: 'my-cred', authorizerType: 'OAuthCredentialProvider' }],
     } as unknown as AgentCoreProjectSpec;
 
     const resources: DeployedResourceState = {
@@ -125,7 +126,7 @@ describe('computeResourceStatuses', () => {
   it('marks credential as local-only when not in deployed state', () => {
     const project = {
       ...baseProject,
-      credentials: [{ name: 'my-cred', type: 'ApiKeyCredentialProvider' }],
+      credentials: [{ name: 'my-cred', authorizerType: 'ApiKeyCredentialProvider' }],
     } as unknown as AgentCoreProjectSpec;
 
     const result = computeResourceStatuses(project, undefined);
@@ -212,9 +213,9 @@ describe('computeResourceStatuses', () => {
   it('marks all resources as local-only when never deployed', () => {
     const project = {
       ...baseProject,
-      agents: [{ name: 'agent-a' }],
+      runtimes: [{ name: 'agent-a' }],
       memories: [{ name: 'mem-a', strategies: [] }],
-      credentials: [{ name: 'cred-a', type: 'ApiKeyCredentialProvider' }],
+      credentials: [{ name: 'cred-a', authorizerType: 'ApiKeyCredentialProvider' }],
     } as unknown as AgentCoreProjectSpec;
 
     const result = computeResourceStatuses(project, undefined);
@@ -396,12 +397,12 @@ describe('computeResourceStatuses', () => {
   it('handles mixed deployed and local-only resources', () => {
     const project = {
       ...baseProject,
-      agents: [{ name: 'deployed-agent' }, { name: 'new-agent' }],
-      credentials: [{ name: 'deployed-cred', type: 'OAuthCredentialProvider' }],
+      runtimes: [{ name: 'deployed-agent' }, { name: 'new-agent' }],
+      credentials: [{ name: 'deployed-cred', authorizerType: 'OAuthCredentialProvider' }],
     } as unknown as AgentCoreProjectSpec;
 
     const resources: DeployedResourceState = {
-      agents: {
+      runtimes: {
         'deployed-agent': {
           runtimeId: 'rt-123',
           runtimeArn: 'arn:aws:bedrock:us-east-1:123456789:agent-runtime/rt-123',

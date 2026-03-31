@@ -36,9 +36,9 @@ describe('requiresUv', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'CodeZip',
           runtimeVersion: 'PYTHON_3_12',
@@ -61,9 +61,9 @@ describe('requiresUv', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'Container',
           runtimeVersion: 'PYTHON_3_12',
@@ -86,7 +86,8 @@ describe('requiresUv', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],
@@ -103,9 +104,9 @@ describe('requiresContainerRuntime', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'Container',
           runtimeVersion: 'PYTHON_3_12',
@@ -128,9 +129,9 @@ describe('requiresContainerRuntime', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'CodeZip',
           runtimeVersion: 'PYTHON_3_12',
@@ -153,7 +154,8 @@ describe('requiresContainerRuntime', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],
@@ -168,9 +170,9 @@ describe('requiresContainerRuntime', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'CodeZip',
           runtimeVersion: 'PYTHON_3_12',
@@ -179,7 +181,6 @@ describe('requiresContainerRuntime', () => {
           protocol: 'HTTP',
         },
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent2',
           build: 'Container',
           runtimeVersion: 'PYTHON_3_12',
@@ -253,7 +254,8 @@ describe('checkDependencyVersions', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],
@@ -272,7 +274,8 @@ describe('checkDependencyVersions', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [],
+      managedBy: 'CDK' as const,
+      runtimes: [],
       memories: [],
       credentials: [],
       evaluators: [],
@@ -290,9 +293,9 @@ describe('checkDependencyVersions', () => {
     const project: AgentCoreProjectSpec = {
       name: 'Test',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime',
           name: 'Agent1',
           build: 'CodeZip',
           runtimeVersion: 'PYTHON_3_12',

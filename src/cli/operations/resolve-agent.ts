@@ -31,35 +31,35 @@ export async function loadDeployedProjectConfig(configIO: ConfigIO = new ConfigI
  */
 export function resolveAgent(
   context: DeployedProjectConfig,
-  options: { agent?: string }
+  options: { runtime?: string }
 ): { success: true; agent: ResolvedAgent } | { success: false; error: string } {
   const { project, deployedState, awsTargets } = context;
 
-  if (project.agents.length === 0) {
-    return { success: false, error: 'No agents defined in agentcore.json' };
+  if (project.runtimes.length === 0) {
+    return { success: false, error: 'No runtimes defined in agentcore.json' };
   }
 
-  // Resolve agent
-  const agentNames = project.agents.map(a => a.name);
+  // Resolve runtime
+  const runtimeNames = project.runtimes.map(a => a.name);
 
-  if (!options.agent && project.agents.length > 1) {
+  if (!options.runtime && project.runtimes.length > 1) {
     return {
       success: false,
-      error: `Multiple agents found. Use --agent to specify one: ${agentNames.join(', ')}`,
+      error: `Multiple runtimes found. Use --runtime to specify one: ${runtimeNames.join(', ')}`,
     };
   }
 
-  const agentSpec = options.agent ? project.agents.find(a => a.name === options.agent) : project.agents[0];
+  const agentSpec = options.runtime ? project.runtimes.find(a => a.name === options.runtime) : project.runtimes[0];
 
-  if (options.agent && !agentSpec) {
+  if (options.runtime && !agentSpec) {
     return {
       success: false,
-      error: `Agent '${options.agent}' not found. Available: ${agentNames.join(', ')}`,
+      error: `Runtime '${options.runtime}' not found. Available: ${runtimeNames.join(', ')}`,
     };
   }
 
   if (!agentSpec) {
-    return { success: false, error: 'No agents defined in agentcore.json' };
+    return { success: false, error: 'No runtimes defined in agentcore.json' };
   }
 
   // Resolve target
@@ -77,12 +77,12 @@ export function resolveAgent(
   }
 
   // Get the deployed state for this specific agent
-  const agentState = targetState?.resources?.agents?.[agentSpec.name];
+  const agentState = targetState?.resources?.runtimes?.[agentSpec.name];
 
   if (!agentState) {
     return {
       success: false,
-      error: `Agent '${agentSpec.name}' is not deployed to target '${selectedTargetName}'. Run 'agentcore deploy' first.`,
+      error: `Runtime '${agentSpec.name}' is not deployed to target '${selectedTargetName}'. Run 'agentcore deploy' first.`,
     };
   }
 

@@ -25,9 +25,8 @@ const baseSpec = () => ({
   name: 'TestProject',
   version: 1,
   tags: { 'agentcore:created-by': 'agentcore-cli' },
-  agents: [
+  runtimes: [
     {
-      type: 'AgentCoreRuntime',
       name: 'myAgent',
       build: 'CodeZip',
       entrypoint: 'main.py',
@@ -36,7 +35,7 @@ const baseSpec = () => ({
       protocol: 'HTTP',
     },
   ],
-  memories: [{ type: 'AgentCoreMemory', name: 'myMemory', eventExpiryDuration: 30, strategies: [] }],
+  memories: [{ name: 'myMemory', eventExpiryDuration: 30, strategies: [] }],
   credentials: [],
   agentCoreGateways: [
     {
@@ -85,7 +84,7 @@ describe('addTag', () => {
     expect(result.success).toBe(true);
     expect(mockWriteProjectSpec).toHaveBeenCalledTimes(1);
     const written = mockWriteProjectSpec.mock.calls[0]![0];
-    expect(written.agents[0].tags).toEqual({ env: 'prod' });
+    expect(written.runtimes[0].tags).toEqual({ env: 'prod' });
   });
 
   it('adds tag to gateway and writes project spec', async () => {
@@ -132,13 +131,13 @@ describe('addTag', () => {
 describe('removeTag', () => {
   it('removes tag from agent', async () => {
     const spec = baseSpec();
-    (spec.agents[0] as Record<string, unknown>).tags = { env: 'prod', team: 'a' };
+    (spec.runtimes[0] as Record<string, unknown>).tags = { env: 'prod', team: 'a' };
     mockReadProjectSpec.mockResolvedValue(spec);
 
     const result = await removeTag('agent:myAgent', 'env');
     expect(result.success).toBe(true);
     const written = mockWriteProjectSpec.mock.calls[0]![0];
-    expect(written.agents[0].tags).toEqual({ team: 'a' });
+    expect(written.runtimes[0].tags).toEqual({ team: 'a' });
   });
 
   it('throws when key not found with hint about defaults', async () => {

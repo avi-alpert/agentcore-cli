@@ -19,7 +19,8 @@ function makeProject(
   return {
     name: 'TestProject',
     version: 1,
-    agents: [],
+    managedBy: 'CDK' as const,
+    runtimes: [],
     memories: [],
     credentials: [],
     evaluators,
@@ -57,7 +58,6 @@ describe('OnlineEvalConfigPrimitive', () => {
       const writtenSpec = mockWriteProjectSpec.mock.calls[0]![0];
       expect(writtenSpec.onlineEvalConfigs).toHaveLength(1);
       const config = writtenSpec.onlineEvalConfigs[0];
-      expect(config.type).toBe('OnlineEvaluationConfig');
       expect(config.name).toBe('MyConfig');
       expect(config.evaluators).toEqual(['Builtin.GoalSuccessRate']);
       expect(config.samplingRate).toBe(10);

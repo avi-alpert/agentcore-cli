@@ -6,6 +6,7 @@ import type { DeployedProjectConfig } from '../resolve-agent';
 import { loadDeployedProjectConfig, resolveAgent } from '../resolve-agent';
 import { generateFilename, saveEvalRun } from './storage';
 import type { EvalEvaluatorResult, EvalRunResult, EvalSessionScore, RunEvalOptions, SessionInfo } from './types';
+import type { EvaluationReferenceInput } from '@aws-sdk/client-bedrock-agentcore';
 import { CloudWatchLogsClient, GetQueryResultsCommand, StartQueryCommand } from '@aws-sdk/client-cloudwatch-logs';
 import type { ResultField } from '@aws-sdk/client-cloudwatch-logs';
 import type { DocumentType } from '@smithy/types';
@@ -93,7 +94,8 @@ function resolveFromArn(options: RunEvalOptions): ResolveResult {
     return { success: false, error: 'No evaluators specified. Use -e/--evaluator with Builtin.* or --evaluator-arn.' };
   }
 
-  const runtimeLogGroup = `/aws/bedrock-agentcore/runtimes/${runtimeId}-${DEFAULT_ENDPOINT_NAME}`;
+  const endpointName = options.endpoint ?? process.env.AGENTCORE_RUNTIME_ENDPOINT ?? DEFAULT_ENDPOINT_NAME;
+  const runtimeLogGroup = `/aws/bedrock-agentcore/runtimes/${runtimeId}-${endpointName}`;
 
   return {
     success: true,
@@ -112,13 +114,14 @@ function resolveFromArn(options: RunEvalOptions): ResolveResult {
  * Project mode: resolve context from agentcore.json + deployed-state.json.
  */
 function resolveFromProject(context: DeployedProjectConfig, options: RunEvalOptions): ResolveResult {
-  const agentResult = resolveAgent(context, { agent: options.agent });
+  const agentResult = resolveAgent(context, { runtime: options.agent });
   if (!agentResult.success) {
     return agentResult;
   }
 
   const { agent } = agentResult;
-  const runtimeLogGroup = `/aws/bedrock-agentcore/runtimes/${agent.runtimeId}-${DEFAULT_ENDPOINT_NAME}`;
+  const endpointName = options.endpoint ?? process.env.AGENTCORE_RUNTIME_ENDPOINT ?? DEFAULT_ENDPOINT_NAME;
+  const runtimeLogGroup = `/aws/bedrock-agentcore/runtimes/${agent.runtimeId}-${endpointName}`;
 
   // Resolve evaluator names to IDs
   const evaluatorIds: string[] = [];
@@ -596,6 +599,62 @@ export async function handleRunEval(options: RunEvalOptions): Promise<RunEvalRes
   // Resolve evaluator levels to determine how to send spans
   const evaluatorLevels = await resolveEvaluatorLevels(ctx.evaluatorIds, ctx.region);
 
+  // Build evaluationReferenceInputs if ground truth was provided
+  const hasRefInputs =
+    (options.assertions?.length ?? 0) > 0 ||
+    (options.expectedTrajectory?.length ?? 0) > 0 ||
+    !!options.expectedResponse;
+
+  let evaluationReferenceInputs: EvaluationReferenceInput[] | undefined;
+  if (hasRefInputs && sessions.length !== 1) {
+    return {
+      success: false,
+      error:
+        'Ground truth flags (-A, --expected-trajectory, --expected-response) require exactly one session. Use -s/--session-id to target a single session.',
+    };
+  }
+  if (hasRefInputs) {
+    const refInputs: EvaluationReferenceInput[] = [];
+    const firstSession = sessions[0]!;
+
+    // Session-level: expectedTrajectory + assertions (one entry per session)
+    const sessionRef: EvaluationReferenceInput = {
+      context: { spanContext: { sessionId: firstSession.sessionId } },
+    };
+    let hasSessionRef = false;
+
+    if (options.expectedTrajectory && options.expectedTrajectory.length > 0) {
+      sessionRef.expectedTrajectory = { toolNames: options.expectedTrajectory };
+      hasSessionRef = true;
+    }
+    if (options.assertions && options.assertions.length > 0) {
+      sessionRef.assertions = options.assertions.map(a => ({ text: a }));
+      hasSessionRef = true;
+    }
+    if (hasSessionRef) {
+      refInputs.push(sessionRef);
+    }
+
+    // Per-trace: expectedResponse (targets a specific trace)
+    if (options.expectedResponse) {
+      const traceId = options.traceId ?? extractTraceIds(firstSession.spans).at(-1);
+      if (!traceId) {
+        return {
+          success: false,
+          error: 'Expected response provided but no trace IDs found in session spans. Use -t/--trace-id to specify.',
+        };
+      }
+      refInputs.push({
+        context: { spanContext: { sessionId: firstSession.sessionId, traceId } },
+        expectedResponse: { text: options.expectedResponse },
+      });
+    }
+
+    if (refInputs.length > 0) {
+      evaluationReferenceInputs = refInputs;
+    }
+  }
+
   // Run each evaluator against each session with level-appropriate targeting
   const results: EvalEvaluatorResult[] = [];
 
@@ -633,6 +692,7 @@ export async function handleRunEval(options: RunEvalOptions): Promise<RunEvalRes
           sessionSpans: session.spans,
           targetTraceIds: batch.traceIds,
           targetSpanIds: batch.spanIds,
+          evaluationReferenceInputs,
         });
 
         for (const r of response.evaluationResults) {
@@ -674,6 +734,15 @@ export async function handleRunEval(options: RunEvalOptions): Promise<RunEvalRes
     lookbackDays: options.days,
     sessionCount: sessions.length,
     results,
+    ...(hasRefInputs
+      ? {
+          referenceInputs: {
+            ...(options.assertions?.length ? { assertions: options.assertions } : {}),
+            ...(options.expectedTrajectory?.length ? { expectedTrajectory: options.expectedTrajectory } : {}),
+            ...(options.expectedResponse ? { expectedResponse: options.expectedResponse } : {}),
+          },
+        }
+      : {}),
   };
 
   // Save to disk

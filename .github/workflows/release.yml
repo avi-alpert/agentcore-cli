@@ -108,6 +108,13 @@ jobs:
           echo "branch=release/v$NEW_VERSION" >> $GITHUB_OUTPUT
           echo "New version: $NEW_VERSION"
 
+      - name: Regenerate JSON schema
+        run: |
+          npm run build
+          node scripts/generate-schema.mjs
+          npx prettier --write schemas/
+          echo "✓ JSON schema regenerated and formatted"
+
       - name: Create release branch and PR
         env:
           NEW_VERSION: ${{ steps.bump.outputs.version }}

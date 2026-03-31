@@ -70,7 +70,7 @@ export function RunEvalFlow({ onExit, onViewRuns }: RunEvalFlowProps) {
         // Cross-reference project agents with deployed state to only show deployed agents
         const deployedAgentNames = new Set<string>();
         for (const target of Object.values(context.deployedState.targets)) {
-          const agentStates = target.resources?.agents;
+          const agentStates = target.resources?.runtimes;
           if (agentStates) {
             for (const name of Object.keys(agentStates)) {
               deployedAgentNames.add(name);
@@ -78,7 +78,7 @@ export function RunEvalFlow({ onExit, onViewRuns }: RunEvalFlowProps) {
           }
         }
 
-        const agents: AgentItem[] = context.project.agents
+        const agents: AgentItem[] = context.project.runtimes
           .filter(a => deployedAgentNames.has(a.name))
           .map(a => ({
             name: a.name,
@@ -90,7 +90,7 @@ export function RunEvalFlow({ onExit, onViewRuns }: RunEvalFlowProps) {
             setFlow({
               name: 'error',
               message:
-                context.project.agents.length === 0
+                context.project.runtimes.length === 0
                   ? 'No agents found in project. Run `agentcore add agent` first.'
                   : 'No deployed agents found. Run `agentcore deploy` first.',
             });
@@ -138,6 +138,9 @@ export function RunEvalFlow({ onExit, onViewRuns }: RunEvalFlowProps) {
           evaluatorArn: config.evaluators,
           days: config.days,
           sessionIds: config.sessionIds.length > 0 ? config.sessionIds : undefined,
+          assertions: config.assertions.length > 0 ? config.assertions : undefined,
+          expectedTrajectory: config.expectedTrajectory.length > 0 ? config.expectedTrajectory : undefined,
+          expectedResponse: config.expectedResponse || undefined,
         });
 
         if (cancelled) return;
@@ -253,6 +256,20 @@ function ResultsView({ run, filePath, onRunAnother, onViewRuns, onExit }: Result
             {'  '}
             <Text bold>Lookback:</Text> {run.lookbackDays}d
           </Text>
+          {run.referenceInputs && (
+            <Text dimColor>
+              Reference inputs:{' '}
+              {[
+                run.referenceInputs.assertions?.length ? `${run.referenceInputs.assertions.length} assertion(s)` : '',
+                run.referenceInputs.expectedResponse ? 'expected response' : '',
+                run.referenceInputs.expectedTrajectory?.length
+                  ? `${run.referenceInputs.expectedTrajectory.length} trajectory step(s)`
+                  : '',
+              ]
+                .filter(Boolean)
+                .join(', ')}
+            </Text>
+          )}
 
           <Box marginTop={1} flexDirection="column">
             <Text dimColor>Scores range from 0 (worst) to 1 (best).</Text>

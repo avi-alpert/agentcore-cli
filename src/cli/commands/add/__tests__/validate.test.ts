@@ -1,15 +1,15 @@
 import type {
   AddAgentOptions,
+  AddCredentialOptions,
   AddGatewayOptions,
   AddGatewayTargetOptions,
-  AddIdentityOptions,
   AddMemoryOptions,
 } from '../types.js';
 import {
   validateAddAgentOptions,
+  validateAddCredentialOptions,
   validateAddGatewayOptions,
   validateAddGatewayTargetOptions,
-  validateAddIdentityOptions,
   validateAddMemoryOptions,
 } from '../validate.js';
 import { existsSync, readFileSync } from 'fs';
@@ -75,7 +75,7 @@ const validMemoryOptions: AddMemoryOptions = {
   strategies: 'SEMANTIC,SUMMARIZATION',
 };
 
-const validIdentityOptions: AddIdentityOptions = {
+const validCredentialOptions: AddCredentialOptions = {
   name: 'test-identity',
   apiKey: 'test-key',
 };
@@ -996,17 +996,17 @@ describe('validate', () => {
     });
   });
 
-  describe('validateAddIdentityOptions', () => {
+  describe('validateAddCredentialOptions', () => {
     // AC23: Required fields validated
     it('returns error for missing required fields', () => {
-      const requiredFields: { field: keyof AddIdentityOptions; error: string }[] = [
+      const requiredFields: { field: keyof AddCredentialOptions; error: string }[] = [
         { field: 'name', error: '--name is required' },
         { field: 'apiKey', error: '--api-key is required' },
       ];
 
       for (const { field, error } of requiredFields) {
-        const opts = { ...validIdentityOptions, [field]: undefined };
-        const result = validateAddIdentityOptions(opts);
+        const opts = { ...validCredentialOptions, [field]: undefined };
+        const result = validateAddCredentialOptions(opts);
         expect(result.valid, `Should fail for missing ${String(field)}`).toBe(false);
         expect(result.error).toBe(error);
       }
@@ -1014,7 +1014,7 @@ describe('validate', () => {
 
     // AC25: Valid options pass
     it('passes for valid options', () => {
-      expect(validateAddIdentityOptions(validIdentityOptions)).toEqual({ valid: true });
+      expect(validateAddCredentialOptions(validCredentialOptions)).toEqual({ valid: true });
     });
   });
 
@@ -1143,20 +1143,6 @@ describe('validate', () => {
       expect(result.valid).toBe(true);
     });
 
-    it('A2A: fails with --framework CrewAI', () => {
-      const result = validateAddAgentOptions({
-        name: 'A2aAgent',
-        type: 'byo',
-        language: 'Python',
-        protocol: 'A2A',
-        framework: 'CrewAI',
-        modelProvider: 'Bedrock',
-        codeLocation: '/path/to/code',
-      });
-      expect(result.valid).toBe(false);
-      expect(result.error).toContain('does not support A2A protocol');
-    });
-
     it('A2A: fails with --framework OpenAIAgents', () => {
       const result = validateAddAgentOptions({
         name: 'A2aAgent',
@@ -1193,9 +1179,9 @@ describe('validate', () => {
     });
   });
 
-  describe('validateAddIdentityOptions OAuth', () => {
+  describe('validateAddCredentialOptions OAuth', () => {
     it('passes for valid OAuth identity', () => {
-      const result = validateAddIdentityOptions({
+      const result = validateAddCredentialOptions({
         name: 'my-oauth',
         type: 'oauth',
         discoveryUrl: 'https://auth.example.com/.well-known/openid-configuration',
@@ -1206,7 +1192,7 @@ describe('validate', () => {
     });
 
     it('returns error for OAuth without discovery-url', () => {
-      const result = validateAddIdentityOptions({
+      const result = validateAddCredentialOptions({
         name: 'my-oauth',
         type: 'oauth',
         clientId: 'client123',
@@ -1217,7 +1203,7 @@ describe('validate', () => {
     });
 
     it('returns error for OAuth without client-id', () => {
-      const result = validateAddIdentityOptions({
+      const result = validateAddCredentialOptions({
         name: 'my-oauth',
         type: 'oauth',
         discoveryUrl: 'https://auth.example.com',
@@ -1228,7 +1214,7 @@ describe('validate', () => {
     });
 
     it('returns error for OAuth without client-secret', () => {
-      const result = validateAddIdentityOptions({
+      const result = validateAddCredentialOptions({
         name: 'my-oauth',
         type: 'oauth',
         discoveryUrl: 'https://auth.example.com',
@@ -1239,7 +1225,7 @@ describe('validate', () => {
     });
 
     it('still requires api-key for default type', () => {
-      const result = validateAddIdentityOptions({ name: 'my-key' });
+      const result = validateAddCredentialOptions({ name: 'my-key' });
       expect(result.valid).toBe(false);
       expect(result.error).toContain('--api-key');
     });
@@ -1320,5 +1306,104 @@ describe('validateAddAgentOptions - VPC validation', () => {
     });
     expect(result.valid).toBe(false);
     expect(result.error).toContain('only valid with --network-mode VPC');
+  });
+});
+
+describe('validateAddAgentOptions - lifecycle configuration', () => {
+  const baseOptions: AddAgentOptions = {
+    name: 'TestAgent',
+    type: 'byo',
+    language: 'Python',
+    framework: 'Strands',
+    modelProvider: 'Bedrock',
+    build: 'CodeZip',
+    codeLocation: './app/test/',
+  };
+
+  it('accepts valid idle-timeout', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 900 });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts valid max-lifetime', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, maxLifetime: 28800 });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts both when idle <= max', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 600, maxLifetime: 3600 });
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts both when idle === max', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 3600, maxLifetime: 3600 });
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects idle-timeout below 60', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 59 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--idle-timeout');
+  });
+
+  it('rejects idle-timeout above 28800', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 28801 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--idle-timeout');
+  });
+
+  it('rejects max-lifetime below 60', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, maxLifetime: 59 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--max-lifetime');
+  });
+
+  it('rejects max-lifetime above 28800', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, maxLifetime: 28801 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--max-lifetime');
+  });
+
+  it('rejects idle > max', () => {
+    const result = validateAddAgentOptions({ ...baseOptions, idleTimeout: 5000, maxLifetime: 1000 });
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--idle-timeout must be <= --max-lifetime');
+  });
+
+  it('passes without lifecycle options (defaults handled server-side)', () => {
+    const result = validateAddAgentOptions(baseOptions);
+    expect(result.valid).toBe(true);
+  });
+
+  it('accepts lifecycle options for import path', () => {
+    const importOptions: AddAgentOptions = {
+      name: 'TestAgent',
+      type: 'import',
+      agentId: 'AGENT123',
+      agentAliasId: 'ALIAS123',
+      region: 'us-east-1',
+      framework: 'Strands',
+      memory: 'none',
+      idleTimeout: 600,
+      maxLifetime: 7200,
+    };
+    const result = validateAddAgentOptions(importOptions);
+    expect(result.valid).toBe(true);
+  });
+
+  it('rejects invalid lifecycle for import path', () => {
+    const importOptions: AddAgentOptions = {
+      name: 'TestAgent',
+      type: 'import',
+      agentId: 'AGENT123',
+      agentAliasId: 'ALIAS123',
+      region: 'us-east-1',
+      framework: 'Strands',
+      memory: 'none',
+      idleTimeout: 50000,
+    };
+    const result = validateAddAgentOptions(importOptions);
+    expect(result.valid).toBe(false);
+    expect(result.error).toContain('--idle-timeout');
   });
 });

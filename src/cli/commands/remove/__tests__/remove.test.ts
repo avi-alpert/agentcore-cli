@@ -67,7 +67,7 @@ describe('remove command', () => {
       expect(json.success).toBe(false);
     });
 
-    it('removes existing agent with --name and --force (non-interactive)', async () => {
+    it('removes existing agent with --name and --yes (non-interactive)', async () => {
       // Add another agent for this test
       const addResult = await runCLI(
         [
@@ -89,13 +89,13 @@ describe('remove command', () => {
       );
       expect(addResult.exitCode).toBe(0);
 
-      // Remove agent using non-interactive mode with --name and --force (no --json)
-      const result = await runCLI(['remove', 'agent', '--name', 'TUITestAgent', '--force'], projectDir);
+      // Remove agent using non-interactive mode with --name and --yes (no --json)
+      const result = await runCLI(['remove', 'agent', '--name', 'TUITestAgent', '--yes'], projectDir);
       expect(result.exitCode).toBe(0);
 
       // Verify agent is removed from schema
       const schema = JSON.parse(await readFile(join(projectDir, 'agentcore', 'agentcore.json'), 'utf-8'));
-      const agent = schema.agents.find((a: { name: string }) => a.name === 'TUITestAgent');
+      const agent = schema.runtimes.find((a: { name: string }) => a.name === 'TUITestAgent');
       expect(agent, 'TUITestAgent should be removed from schema').toBeUndefined();
     });
 
@@ -107,7 +107,7 @@ describe('remove command', () => {
 
       // Verify agent is removed from schema
       const schema = JSON.parse(await readFile(join(projectDir, 'agentcore', 'agentcore.json'), 'utf-8'));
-      expect(schema.agents.length, 'Agent should be removed from schema').toBe(0);
+      expect(schema.runtimes.length, 'Agent should be removed from schema').toBe(0);
     });
   });
 });

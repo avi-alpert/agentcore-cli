@@ -20,7 +20,8 @@ vi.mock('../../../../lib/index.js', () => ({
 const makeProject = (agentNames: string[]) => ({
   name: 'TestProject',
   version: 1,
-  agents: agentNames.map(name => ({ name, type: 'AgentCoreRuntime' })),
+  managedBy: 'CDK' as const,
+  runtimes: agentNames.map(name => ({ name })),
   memories: [],
   credentials: [],
 });
@@ -77,8 +78,8 @@ describe('remove', () => {
 
     expect(result).toEqual({ success: true });
     expect(mockWriteProjectSpec).toHaveBeenCalled();
-    expect(project.agents).toHaveLength(1);
-    expect(project.agents[0]!.name).toBe('Agent2');
+    expect(project.runtimes).toHaveLength(1);
+    expect(project.runtimes[0]!.name).toBe('Agent2');
   });
 
   it('returns error when agent not found', async () => {

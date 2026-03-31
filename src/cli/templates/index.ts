@@ -1,5 +1,4 @@
 import type { BaseRenderer } from './BaseRenderer';
-import { CrewAIRenderer } from './CrewAIRenderer';
 import { GoogleADKRenderer } from './GoogleADKRenderer';
 import { LangGraphRenderer } from './LangGraphRenderer';
 import { McpRenderer } from './McpRenderer';
@@ -10,7 +9,6 @@ import type { AgentRenderConfig } from './types';
 export { BaseRenderer, type RendererContext } from './BaseRenderer';
 export { CDKRenderer, type CDKRendererContext } from './CDKRenderer';
 export { renderGatewayTargetTemplate } from './GatewayTargetRenderer';
-export { CrewAIRenderer } from './CrewAIRenderer';
 export { GoogleADKRenderer } from './GoogleADKRenderer';
 export { LangGraphRenderer } from './LangGraphRenderer';
 export { McpRenderer } from './McpRenderer';
@@ -30,8 +28,6 @@ export function createRenderer(config: AgentRenderConfig): BaseRenderer {
   switch (config.sdkFramework) {
     case 'Strands':
       return new StrandsRenderer(config);
-    case 'CrewAI':
-      return new CrewAIRenderer(config);
     case 'GoogleADK':
       return new GoogleADKRenderer(config);
     case 'LangChain_LangGraph':

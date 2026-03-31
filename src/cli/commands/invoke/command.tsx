@@ -2,6 +2,7 @@ import { getErrorMessage } from '../../errors';
 import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
 import { requireProject } from '../../tui/guards';
 import { InvokeScreen } from '../../tui/screens/invoke';
+import { parseHeaderFlags } from '../shared/header-utils';
 import { handleInvoke, loadInvokeConfig } from './action';
 import type { InvokeOptions } from './types';
 import { validateInvokeOptions } from './validate';
@@ -95,7 +96,7 @@ export const registerInvoke = (program: Command) => {
     .description(COMMAND_DESCRIPTIONS.invoke)
     .argument('[prompt]', 'Prompt to send to the agent [non-interactive]')
     .option('--prompt <text>', 'Prompt to send to the agent [non-interactive]')
-    .option('--agent <name>', 'Select specific agent [non-interactive]')
+    .option('--runtime <name>', 'Select specific runtime [non-interactive]')
     .option('--target <name>', 'Select deployment target [non-interactive]')
     .option('--session-id <id>', 'Use specific session ID for conversation continuity')
     .option('--user-id <id>', 'User ID for runtime invocation (default: "default-user")')
@@ -103,12 +104,19 @@ export const registerInvoke = (program: Command) => {
     .option('--stream', 'Stream response in real-time (TUI streams by default) [non-interactive]')
     .option('--tool <name>', 'MCP tool name (use with "call-tool" prompt) [non-interactive]')
     .option('--input <json>', 'MCP tool arguments as JSON (use with --tool) [non-interactive]')
+    .option(
+      '-H, --header <header>',
+      'Custom header to forward to the agent (format: "Name: Value", repeatable) [non-interactive]',
+      (val: string, prev: string[]) => [...prev, val],
+      [] as string[]
+    )
+    .option('--bearer-token <token>', 'Bearer token for CUSTOM_JWT auth (bypasses SigV4) [non-interactive]')
     .action(
       async (
         positionalPrompt: string | undefined,
         cliOptions: {
           prompt?: string;
-          agent?: string;
+          runtime?: string;
           target?: string;
           sessionId?: string;
           userId?: string;
@@ -116,6 +124,8 @@ export const registerInvoke = (program: Command) => {
           stream?: boolean;
           tool?: string;
           input?: string;
+          header?: string[];
+          bearerToken?: string;
         }
       ) => {
         try {
@@ -123,18 +133,25 @@ export const registerInvoke = (program: Command) => {
           // --prompt flag takes precedence over positional argument
           const prompt = cliOptions.prompt ?? positionalPrompt;
 
+          // Parse custom headers
+          let headers: Record<string, string> | undefined;
+          if (cliOptions.header && cliOptions.header.length > 0) {
+            headers = parseHeaderFlags(cliOptions.header);
+          }
+
           // CLI mode if any CLI-specific options provided (follows deploy command pattern)
           if (
             prompt ||
             cliOptions.json ||
             cliOptions.target ||
             cliOptions.stream ||
-            cliOptions.agent ||
-            cliOptions.tool
+            cliOptions.runtime ||
+            cliOptions.tool ||
+            cliOptions.bearerToken
           ) {
             await handleInvokeCLI({
               prompt,
-              agentName: cliOptions.agent,
+              agentName: cliOptions.runtime,
               targetName: cliOptions.target ?? 'default',
               sessionId: cliOptions.sessionId,
               userId: cliOptions.userId,
@@ -142,15 +159,19 @@ export const registerInvoke = (program: Command) => {
               stream: cliOptions.stream,
               tool: cliOptions.tool,
               input: cliOptions.input,
+              headers,
+              bearerToken: cliOptions.bearerToken,
             });
           } else {
-            // No CLI options - interactive TUI mode
+            // No CLI options - interactive TUI mode (headers still passed if provided)
             const { waitUntilExit } = render(
               <InvokeScreen
                 isInteractive={true}
                 onExit={() => process.exit(0)}
                 initialSessionId={cliOptions.sessionId}
                 initialUserId={cliOptions.userId}
+                initialHeaders={headers}
+                initialBearerToken={cliOptions.bearerToken}
               />
             );
             await waitUntilExit();

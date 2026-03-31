@@ -9,8 +9,9 @@ import type {
   MemoryStrategyType,
   ModelProvider,
 } from '../../../../schema';
-import { DEFAULT_STRATEGY_NAMESPACES } from '../../../../schema';
+import { DEFAULT_EPISODIC_REFLECTION_NAMESPACES, DEFAULT_STRATEGY_NAMESPACES } from '../../../../schema';
 import { GatewayPrimitive } from '../../../primitives/GatewayPrimitive';
+import { buildAuthorizerConfigFromJwtConfig } from '../../../primitives/auth-utils';
 import {
   computeDefaultCredentialEnvVarName,
   computeManagedOAuthCredentialName,
@@ -66,19 +67,19 @@ export function mapGenerateInputToMemories(memory: MemoryOption, projectName: st
   // Short term memory has no strategies - just base memory with expiration time
   // Long term memory includes strategies for semantic search, summarization, and user preferences
   if (memory === 'longAndShortTerm') {
-    const strategyTypes: MemoryStrategyType[] = ['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION'];
+    const strategyTypes: MemoryStrategyType[] = ['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION', 'EPISODIC'];
     for (const type of strategyTypes) {
       const defaultNamespaces = DEFAULT_STRATEGY_NAMESPACES[type];
       strategies.push({
         type,
         ...(defaultNamespaces && { namespaces: defaultNamespaces }),
+        ...(type === 'EPISODIC' && { reflectionNamespaces: DEFAULT_EPISODIC_REFLECTION_NAMESPACES }),
       });
     }
   }
 
   return [
     {
-      type: 'AgentCoreMemory',
       name: `${projectName}Memory`,
       eventExpiryDuration: DEFAULT_MEMORY_EXPIRY_DAYS,
       strategies,
@@ -97,7 +98,7 @@ export function mapModelProviderToCredentials(modelProvider: ModelProvider, proj
 
   return [
     {
-      type: 'ApiKeyCredentialProvider',
+      authorizerType: 'ApiKeyCredentialProvider',
       name: computeCredentialName(projectName, modelProvider),
     },
   ];
@@ -112,7 +113,6 @@ export function mapGenerateConfigToAgent(config: GenerateConfig): AgentEnvSpec {
   const networkMode = config.networkMode ?? DEFAULT_NETWORK_MODE;
 
   return {
-    type: 'AgentCoreRuntime',
     name: config.projectName,
     build: config.buildType ?? 'CodeZip',
     entrypoint: DEFAULT_PYTHON_ENTRYPOINT as FilePath,
@@ -131,7 +131,21 @@ export function mapGenerateConfigToAgent(config: GenerateConfig): AgentEnvSpec {
     ...(config.requestHeaderAllowlist?.length && {
       requestHeaderAllowlist: config.requestHeaderAllowlist,
     }),
-    ...(protocol !== 'MCP' && { modelProvider: config.modelProvider }),
+    ...(config.authorizerType && { authorizerType: config.authorizerType }),
+    ...(config.authorizerType === 'CUSTOM_JWT' &&
+      config.jwtConfig && {
+        authorizerConfiguration: buildAuthorizerConfigFromJwtConfig(config.jwtConfig),
+      }),
+    ...(config.idleRuntimeSessionTimeout !== undefined || config.maxLifetime !== undefined
+      ? {
+          lifecycleConfiguration: {
+            ...(config.idleRuntimeSessionTimeout !== undefined && {
+              idleRuntimeSessionTimeout: config.idleRuntimeSessionTimeout,
+            }),
+            ...(config.maxLifetime !== undefined && { maxLifetime: config.maxLifetime }),
+          },
+        }
+      : {}),
     // MCP uses mcp.run() which is incompatible with the opentelemetry-instrument wrapper
     ...(protocol === 'MCP' && { instrumentation: { enableOtel: false } }),
   };

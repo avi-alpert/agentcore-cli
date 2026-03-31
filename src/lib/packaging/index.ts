@@ -19,9 +19,9 @@ import type {
  * @throws PackagingError if agent not found
  */
 export function validateAgentExists(project: AgentCoreProjectSpec, agentName: string): void {
-  const agent = project.agents.find((a: AgentEnvSpec) => a.name === agentName);
+  const agent = project.runtimes.find((a: AgentEnvSpec) => a.name === agentName);
   if (!agent) {
-    const available = project.agents.map((a: AgentEnvSpec) => a.name).join(', ');
+    const available = project.runtimes.map((a: AgentEnvSpec) => a.name).join(', ');
     throw new PackagingError(`Agent '${agentName}' not found. Available agents: ${available}`);
   }
 }
@@ -78,7 +78,7 @@ export async function packRuntime(spec: AgentEnvSpec, options?: PackageOptions):
  * Defaults to Python if no runtimeVersion is specified.
  */
 export function packCodeZipSync(config: CodeBundleConfig | AgentEnvSpec, options?: PackageOptions): ArtifactResult {
-  const runtimeVersion = config.runtimeVersion ?? 'PYTHON_3_12';
+  const runtimeVersion = config.runtimeVersion ?? 'PYTHON_3_13';
   const packager = getCodeZipPackager(runtimeVersion);
   return packager.packCodeZip(config as AgentEnvSpec, options);
 }

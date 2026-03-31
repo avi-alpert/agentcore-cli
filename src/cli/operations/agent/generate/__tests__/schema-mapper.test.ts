@@ -29,21 +29,21 @@ describe('mapGenerateInputToMemories', () => {
   it('returns memory with no strategies for "shortTerm"', () => {
     const result = mapGenerateInputToMemories('shortTerm', 'Proj');
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('AgentCoreMemory');
     expect(result[0]!.name).toBe('ProjMemory');
     expect(result[0]!.eventExpiryDuration).toBe(30);
     expect(result[0]!.strategies).toEqual([]);
   });
 
-  it('returns memory with three strategies for "longAndShortTerm"', () => {
+  it('returns memory with four strategies for longAndShortTerm', () => {
     const result = mapGenerateInputToMemories('longAndShortTerm', 'Proj');
     expect(result).toHaveLength(1);
     const strategies = result[0]!.strategies;
-    expect(strategies).toHaveLength(3);
+    expect(strategies).toHaveLength(4);
     const types = strategies.map(s => s.type);
     expect(types).toContain('SEMANTIC');
     expect(types).toContain('USER_PREFERENCE');
     expect(types).toContain('SUMMARIZATION');
+    expect(types).toContain('EPISODIC');
   });
 
   it('includes default namespaces for strategies', () => {
@@ -66,7 +66,7 @@ describe('mapModelProviderToCredentials', () => {
   it('returns credential for Anthropic', () => {
     const result = mapModelProviderToCredentials('Anthropic', 'Proj');
     expect(result).toHaveLength(1);
-    expect(result[0]!.type).toBe('ApiKeyCredentialProvider');
+    expect(result[0]!.authorizerType).toBe('ApiKeyCredentialProvider');
     expect(result[0]!.name).toBe('ProjAnthropic');
   });
 
@@ -82,13 +82,12 @@ describe('mapModelProviderToCredentials', () => {
 });
 
 describe('mapGenerateConfigToAgent', () => {
-  it('creates AgentCoreRuntime agent spec', () => {
+  it('creates agent spec', () => {
     const result = mapGenerateConfigToAgent(baseConfig);
-    expect(result.type).toBe('AgentCoreRuntime');
     expect(result.name).toBe('TestProject');
     expect(result.build).toBe('CodeZip');
     expect(result.entrypoint).toBe('main.py');
-    expect(result.runtimeVersion).toBe('PYTHON_3_12');
+    expect(result.runtimeVersion).toBe('PYTHON_3_13');
     expect(result.networkMode).toBe('PUBLIC');
     expect(result.protocol).toBe('HTTP');
   });
@@ -128,7 +127,7 @@ describe('mapGenerateConfigToResources', () => {
     const result = mapGenerateConfigToResources(config);
     expect(result.memories).toHaveLength(1);
     expect(result.credentials).toHaveLength(1);
-    expect(result.memories[0]!.strategies).toHaveLength(3);
+    expect(result.memories[0]!.strategies).toHaveLength(4);
   });
 });
 
@@ -191,7 +190,7 @@ describe('mapGenerateConfigToRenderConfig', () => {
   it('populates memoryProviders with strategy types for longAndShortTerm', async () => {
     const config: GenerateConfig = { ...baseConfig, memory: 'longAndShortTerm' };
     const result = await mapGenerateConfigToRenderConfig(config, []);
-    expect(result.memoryProviders[0]!.strategies).toEqual(['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION']);
+    expect(result.memoryProviders[0]!.strategies).toEqual(['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION', 'EPISODIC']);
   });
 });
 
@@ -213,7 +212,6 @@ describe('mapGenerateConfigToAgent protocol mode', () => {
     };
     const result = mapGenerateConfigToAgent(httpConfig);
     expect(result.protocol).toBe('HTTP');
-    expect(result.modelProvider).toBe('Bedrock');
   });
 
   it('sets protocol for A2A', () => {
@@ -223,7 +221,6 @@ describe('mapGenerateConfigToAgent protocol mode', () => {
     };
     const result = mapGenerateConfigToAgent(a2aConfig);
     expect(result.protocol).toBe('A2A');
-    expect(result.modelProvider).toBe('Bedrock');
   });
 });
 
@@ -398,5 +395,63 @@ describe('mapByoConfigToAgent - VPC support', () => {
     });
     expect(result.networkMode).toBe('PUBLIC');
     expect(result.networkConfig).toBeUndefined();
+  });
+});
+
+describe('mapGenerateConfigToAgent - lifecycleConfiguration', () => {
+  it('includes lifecycleConfiguration when idleRuntimeSessionTimeout is set', () => {
+    const result = mapGenerateConfigToAgent({ ...baseConfig, idleRuntimeSessionTimeout: 600 });
+    expect(result.lifecycleConfiguration).toEqual({ idleRuntimeSessionTimeout: 600 });
+  });
+
+  it('includes lifecycleConfiguration when maxLifetime is set', () => {
+    const result = mapGenerateConfigToAgent({ ...baseConfig, maxLifetime: 14400 });
+    expect(result.lifecycleConfiguration).toEqual({ maxLifetime: 14400 });
+  });
+
+  it('includes both fields when both are set', () => {
+    const result = mapGenerateConfigToAgent({ ...baseConfig, idleRuntimeSessionTimeout: 300, maxLifetime: 7200 });
+    expect(result.lifecycleConfiguration).toEqual({ idleRuntimeSessionTimeout: 300, maxLifetime: 7200 });
+  });
+
+  it('omits lifecycleConfiguration when neither field is set', () => {
+    const result = mapGenerateConfigToAgent(baseConfig);
+    expect(result.lifecycleConfiguration).toBeUndefined();
+  });
+});
+
+describe('mapByoConfigToAgent - lifecycleConfiguration', () => {
+  const baseByoConfig = {
+    name: 'ByoAgent',
+    agentType: 'byo' as const,
+    codeLocation: 'app/ByoAgent/',
+    entrypoint: 'main.py',
+    language: 'Python' as const,
+    buildType: 'CodeZip' as const,
+    protocol: 'HTTP' as const,
+    framework: 'Strands' as const,
+    modelProvider: 'Bedrock' as const,
+    pythonVersion: 'PYTHON_3_12' as const,
+    memory: 'none' as const,
+  };
+
+  it('includes lifecycleConfiguration when idleRuntimeSessionTimeout is set', () => {
+    const result = mapByoConfigToAgent({ ...baseByoConfig, idleRuntimeSessionTimeout: 900 });
+    expect(result.lifecycleConfiguration).toEqual({ idleRuntimeSessionTimeout: 900 });
+  });
+
+  it('includes lifecycleConfiguration when maxLifetime is set', () => {
+    const result = mapByoConfigToAgent({ ...baseByoConfig, maxLifetime: 28800 });
+    expect(result.lifecycleConfiguration).toEqual({ maxLifetime: 28800 });
+  });
+
+  it('includes both fields when both are set', () => {
+    const result = mapByoConfigToAgent({ ...baseByoConfig, idleRuntimeSessionTimeout: 600, maxLifetime: 3600 });
+    expect(result.lifecycleConfiguration).toEqual({ idleRuntimeSessionTimeout: 600, maxLifetime: 3600 });
+  });
+
+  it('omits lifecycleConfiguration when neither field is set', () => {
+    const result = mapByoConfigToAgent(baseByoConfig);
+    expect(result.lifecycleConfiguration).toBeUndefined();
   });
 });

@@ -64,7 +64,7 @@ function makeDeployedContext({
 } = {}) {
   return {
     project: {
-      agents: [{ name: agentName }],
+      runtimes: [{ name: agentName }],
       onlineEvalConfigs: [],
     },
     awsTargets: [{ name: 'dev', region: 'us-east-1', account: '111222333444' }],
@@ -72,7 +72,7 @@ function makeDeployedContext({
       targets: {
         dev: {
           resources: {
-            agents: {
+            runtimes: {
               [agentName]: {
                 runtimeId,
                 runtimeArn: `arn:aws:bedrock:us-east-1:111222333444:agent-runtime/${runtimeId}`,
@@ -598,6 +598,146 @@ describe('handleRunEval', () => {
     expect(result.error).toContain('No evaluators specified');
   });
 
+  // ─── Endpoint selection ──────────────────────────────────────────────────
+
+  it('uses --endpoint option to construct runtime log group', async () => {
+    const ctx = makeDeployedContext();
+    mockLoadDeployedProjectConfig.mockResolvedValue(ctx);
+    mockResolveAgent.mockReturnValue({
+      success: true,
+      agent: {
+        agentName: 'my-agent',
+        targetName: 'dev',
+        region: 'us-east-1',
+        accountId: '111222333444',
+        runtimeId: 'rt-123',
+      },
+    });
+
+    const spanRows = [makeOtelSpanRow('session-1', 'trace-1')];
+    setupCloudWatchToReturn(spanRows);
+
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    await handleRunEval({ evaluator: ['Builtin.GoalSuccessRate'], days: 7, endpoint: 'PROMPT_V1' });
+
+    // The second CloudWatch query (runtime logs) should target the PROMPT_V1 log group
+    const runtimeLogCall = mockSend.mock.calls.find((c: unknown[]) => {
+      const input = (c[0] as { input?: { logGroupName?: string } }).input;
+      return input?.logGroupName?.includes('PROMPT_V1');
+    });
+    expect(runtimeLogCall).toBeDefined();
+  });
+
+  it('uses AGENTCORE_RUNTIME_ENDPOINT env var when --endpoint is not provided', async () => {
+    const originalEnv = process.env.AGENTCORE_RUNTIME_ENDPOINT;
+    process.env.AGENTCORE_RUNTIME_ENDPOINT = 'CUSTOM_V2';
+
+    try {
+      const ctx = makeDeployedContext();
+      mockLoadDeployedProjectConfig.mockResolvedValue(ctx);
+      mockResolveAgent.mockReturnValue({
+        success: true,
+        agent: {
+          agentName: 'my-agent',
+          targetName: 'dev',
+          region: 'us-east-1',
+          accountId: '111222333444',
+          runtimeId: 'rt-123',
+        },
+      });
+
+      const spanRows = [makeOtelSpanRow('session-1', 'trace-1')];
+      setupCloudWatchToReturn(spanRows);
+
+      mockEvaluate.mockResolvedValue({
+        evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+      });
+
+      await handleRunEval({ evaluator: ['Builtin.GoalSuccessRate'], days: 7 });
+
+      const runtimeLogCall = mockSend.mock.calls.find((c: unknown[]) => {
+        const input = (c[0] as { input?: { logGroupName?: string } }).input;
+        return input?.logGroupName?.includes('CUSTOM_V2');
+      });
+      expect(runtimeLogCall).toBeDefined();
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.AGENTCORE_RUNTIME_ENDPOINT;
+      } else {
+        process.env.AGENTCORE_RUNTIME_ENDPOINT = originalEnv;
+      }
+    }
+  });
+
+  it('--endpoint takes precedence over AGENTCORE_RUNTIME_ENDPOINT env var', async () => {
+    const originalEnv = process.env.AGENTCORE_RUNTIME_ENDPOINT;
+    process.env.AGENTCORE_RUNTIME_ENDPOINT = 'ENV_ENDPOINT';
+
+    try {
+      const ctx = makeDeployedContext();
+      mockLoadDeployedProjectConfig.mockResolvedValue(ctx);
+      mockResolveAgent.mockReturnValue({
+        success: true,
+        agent: {
+          agentName: 'my-agent',
+          targetName: 'dev',
+          region: 'us-east-1',
+          accountId: '111222333444',
+          runtimeId: 'rt-123',
+        },
+      });
+
+      const spanRows = [makeOtelSpanRow('session-1', 'trace-1')];
+      setupCloudWatchToReturn(spanRows);
+
+      mockEvaluate.mockResolvedValue({
+        evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+      });
+
+      await handleRunEval({ evaluator: ['Builtin.GoalSuccessRate'], days: 7, endpoint: 'FLAG_ENDPOINT' });
+
+      const flagCall = mockSend.mock.calls.find((c: unknown[]) => {
+        const input = (c[0] as { input?: { logGroupName?: string } }).input;
+        return input?.logGroupName?.includes('FLAG_ENDPOINT');
+      });
+      const envCall = mockSend.mock.calls.find((c: unknown[]) => {
+        const input = (c[0] as { input?: { logGroupName?: string } }).input;
+        return input?.logGroupName?.includes('ENV_ENDPOINT');
+      });
+      expect(flagCall).toBeDefined();
+      expect(envCall).toBeUndefined();
+    } finally {
+      if (originalEnv === undefined) {
+        delete process.env.AGENTCORE_RUNTIME_ENDPOINT;
+      } else {
+        process.env.AGENTCORE_RUNTIME_ENDPOINT = originalEnv;
+      }
+    }
+  });
+
+  it('uses --endpoint in ARN mode', async () => {
+    setupCloudWatchToReturn([makeOtelSpanRow('s1', 't1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 's1' } } }],
+    });
+
+    await handleRunEval({
+      agentArn: 'arn:aws:bedrock-agentcore:us-west-2:123456789012:runtime/rt-arn-ep',
+      evaluator: ['Builtin.Helpfulness'],
+      days: 3,
+      endpoint: 'PROMPT_V1',
+    });
+
+    const runtimeLogCall = mockSend.mock.calls.find((c: unknown[]) => {
+      const input = (c[0] as { input?: { logGroupName?: string } }).input;
+      return input?.logGroupName?.includes('PROMPT_V1');
+    });
+    expect(runtimeLogCall).toBeDefined();
+  });
+
   // ─── Evaluator-level grouping ────────────────────────────────────────────
 
   it('sends targetTraceIds for TRACE-level builtin evaluators', async () => {
@@ -936,5 +1076,146 @@ describe('handleRunEval', () => {
     const queryString = getFirstQueryString();
     expect(queryString).not.toContain("'rt-123'; DROP TABLE'");
     expect(queryString).toContain('rt-123; DROP TABLE');
+  });
+
+  // ─── Ground truth / reference inputs ────────────────────────────────────
+
+  function setupDefaultAgent() {
+    const ctx = makeDeployedContext();
+    mockLoadDeployedProjectConfig.mockResolvedValue(ctx);
+    mockResolveAgent.mockReturnValue({
+      success: true,
+      agent: {
+        agentName: 'my-agent',
+        targetName: 'dev',
+        region: 'us-east-1',
+        accountId: '111222333444',
+        runtimeId: 'rt-123',
+      },
+    });
+  }
+
+  it('passes expectedTrajectory as toolNames in evaluationReferenceInputs', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+      expectedTrajectory: ['tool_1', 'tool_2', 'tool_3'],
+    });
+
+    expect(mockEvaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationReferenceInputs: expect.arrayContaining([
+          expect.objectContaining({
+            expectedTrajectory: { toolNames: ['tool_1', 'tool_2', 'tool_3'] },
+          }),
+        ]),
+      })
+    );
+  });
+
+  it('passes a single-element expectedTrajectory array', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+      expectedTrajectory: ['tool_1'],
+    });
+
+    expect(mockEvaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationReferenceInputs: expect.arrayContaining([
+          expect.objectContaining({
+            expectedTrajectory: { toolNames: ['tool_1'] },
+          }),
+        ]),
+      })
+    );
+  });
+
+  it('does not include evaluationReferenceInputs when no ground truth provided', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+    });
+
+    expect(mockEvaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationReferenceInputs: undefined,
+      })
+    );
+  });
+
+  it('passes assertions in evaluationReferenceInputs', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+      assertions: ['response is relevant', 'no hallucinations'],
+    });
+
+    expect(mockEvaluate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        evaluationReferenceInputs: expect.arrayContaining([
+          expect.objectContaining({
+            assertions: [{ text: 'response is relevant' }, { text: 'no hallucinations' }],
+          }),
+        ]),
+      })
+    );
+  });
+
+  it('includes expectedTrajectory in saved run result referenceInputs', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1')]);
+    mockEvaluate.mockResolvedValue({
+      evaluationResults: [{ value: 4.0, context: { spanContext: { sessionId: 'session-1' } } }],
+    });
+
+    const result = await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+      expectedTrajectory: ['tool_1', 'tool_2'],
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.run!.referenceInputs).toEqual({
+      expectedTrajectory: ['tool_1', 'tool_2'],
+    });
+  });
+
+  it('returns error when ground truth flags are used with multiple sessions', async () => {
+    setupDefaultAgent();
+    setupCloudWatchToReturn([makeOtelSpanRow('session-1', 'trace-1'), makeOtelSpanRow('session-2', 'trace-2')]);
+
+    const result = await handleRunEval({
+      evaluator: ['Builtin.GoalSuccessRate'],
+      days: 7,
+      assertions: ['Agent should greet user'],
+    });
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain('require exactly one session');
   });
 });

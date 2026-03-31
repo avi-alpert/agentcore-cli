@@ -23,10 +23,10 @@ export abstract class BasePrimitive<
   /** Shared ConfigIO instance for agentcore.json operations. */
   protected readonly configIO = new ConfigIO();
 
-  /** Resource kind identifier (e.g., 'agent', 'memory', 'identity', 'gateway', 'mcp-tool') */
+  /** Resource kind identifier (e.g., 'agent', 'memory', 'credential', 'gateway', 'mcp-tool') */
   abstract readonly kind: ResourceType;
 
-  /** Human-readable label (e.g., 'Agent', 'Memory', 'Identity') */
+  /** Human-readable label (e.g., 'Agent', 'Memory', 'Credential') */
   abstract readonly label: string;
 
   /** Zod schema for validating the primitive's config */
@@ -96,16 +96,16 @@ export abstract class BasePrimitive<
 
   /**
    * Register the standard remove subcommand for this primitive.
-   * Handles CLI mode (--name/--force/--json) and TUI fallback identically.
+   * Handles CLI mode (--name/--yes/--json) and TUI fallback identically.
    */
   protected registerRemoveSubcommand(removeCmd: Command): void {
     removeCmd
       .command(this.kind)
       .description(`Remove ${this.article} ${this.label.toLowerCase()} from the project`)
       .option('--name <name>', 'Name of resource to remove [non-interactive]')
-      .option('--force', 'Skip confirmation prompt [non-interactive]')
+      .option('-y, --yes', 'Skip confirmation prompt [non-interactive]')
       .option('--json', 'Output as JSON [non-interactive]')
-      .action(async (cliOptions: { name?: string; force?: boolean; json?: boolean }) => {
+      .action(async (cliOptions: { name?: string; yes?: boolean; json?: boolean }) => {
         try {
           if (!findConfigRoot()) {
             console.error('No agentcore project found. Run `agentcore create` first.');
@@ -113,7 +113,7 @@ export abstract class BasePrimitive<
           }
 
           // Any flag triggers non-interactive CLI mode
-          if (cliOptions.name || cliOptions.force || cliOptions.json) {
+          if (cliOptions.name || cliOptions.yes || cliOptions.json) {
             if (!cliOptions.name) {
               console.log(JSON.stringify({ success: false, error: '--name is required' }));
               process.exit(1);
@@ -141,7 +141,7 @@ export abstract class BasePrimitive<
             const { clear, unmount } = render(
               React.createElement(RemoveFlow, {
                 isInteractive: false,
-                force: cliOptions.force,
+                force: cliOptions.yes,
                 initialResourceType: this.kind,
                 initialResourceName: cliOptions.name,
                 onExit: () => {

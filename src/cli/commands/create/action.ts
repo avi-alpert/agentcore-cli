@@ -1,6 +1,5 @@
 import { APP_DIR, CONFIG_DIR, ConfigIO, setEnvVar, setSessionProjectRoot } from '../../../lib';
 import type {
-  AgentCoreProjectSpec,
   BuildType,
   DeployedState,
   ModelProvider,
@@ -19,28 +18,11 @@ import {
 } from '../../operations/agent/generate';
 import { executeImportAgent } from '../../operations/agent/import';
 import { credentialPrimitive } from '../../primitives/registry';
+import { createDefaultProjectSpec } from '../../project';
 import { CDKRenderer, createRenderer } from '../../templates';
 import type { CreateResult } from './types';
 import { mkdir } from 'fs/promises';
 import { join } from 'path';
-
-function createDefaultProjectSpec(projectName: string): AgentCoreProjectSpec {
-  return {
-    name: projectName,
-    version: 1,
-    agents: [],
-    memories: [],
-    credentials: [],
-    evaluators: [],
-    onlineEvalConfigs: [],
-    agentCoreGateways: [],
-    policyEngines: [],
-    tags: {
-      'agentcore:created-by': 'agentcore-cli',
-      'agentcore:project-name': projectName,
-    },
-  };
-}
 
 function createDefaultDeployedState(): DeployedState {
   return { targets: {} };
@@ -140,6 +122,8 @@ export interface CreateWithAgentOptions {
   agentId?: string;
   agentAliasId?: string;
   region?: string;
+  idleTimeout?: number;
+  maxLifetime?: number;
   skipGit?: boolean;
   skipPythonSetup?: boolean;
   onProgress?: ProgressCallback;
@@ -160,6 +144,8 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
     subnets,
     securityGroups,
     requestHeaderAllowlist,
+    idleTimeout,
+    maxLifetime: maxLifetimeOpt,
     skipGit,
     skipPythonSetup,
     onProgress,
@@ -237,6 +223,8 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
       subnets,
       securityGroups,
       requestHeaderAllowlist,
+      ...(idleTimeout !== undefined && { idleRuntimeSessionTimeout: idleTimeout }),
+      ...(maxLifetimeOpt !== undefined && { maxLifetime: maxLifetimeOpt }),
     };
 
     // Resolve credential strategy FIRST (new project has no existing credentials)

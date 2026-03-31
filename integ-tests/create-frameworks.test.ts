@@ -57,48 +57,8 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with differen
 
     // Verify config has agent registered
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents).toBeDefined();
-    expect(agents.length).toBe(1);
-    expect(agents[0]!.name).toBe(agentName);
-  });
-
-  it('creates CrewAI project', async () => {
-    const name = `Crew${Date.now().toString().slice(-6)}`;
-    const result = await runCLI(
-      [
-        'create',
-        '--name',
-        name,
-        '--language',
-        'Python',
-        '--framework',
-        'CrewAI',
-        '--model-provider',
-        'Bedrock',
-        '--memory',
-        'none',
-        '--json',
-      ],
-      testDir
-    );
-
-    expect(result.exitCode, `stderr: ${result.stderr}`).toBe(0);
-    const json = JSON.parse(result.stdout);
-    expect(json.success).toBe(true);
-
-    const agentName = json.agentName || name;
-    const agentDir = join(json.projectPath, 'app', agentName);
-
-    expect(await exists(agentDir), 'Agent directory should exist').toBe(true);
-    expect(await exists(join(agentDir, 'pyproject.toml')), 'pyproject.toml should exist').toBe(true);
-
-    // Verify pyproject.toml references crewai
-    const pyproject = await readFile(join(agentDir, 'pyproject.toml'), 'utf-8');
-    expect(pyproject.toLowerCase().includes('crewai'), 'pyproject.toml should reference crewai').toBeTruthy();
-
-    const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
     expect(agents.length).toBe(1);
     expect(agents[0]!.name).toBe(agentName);
   });
@@ -142,7 +102,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with differen
 
     // Verify config has agent registered
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents.length).toBe(1);
     expect(agents[0]!.name).toBe(agentName);
   });
@@ -183,7 +143,7 @@ describe.skipIf(!prereqs.npm || !prereqs.git)('integration: create with differen
 
     // Verify config has agent registered
     const config = await readProjectConfig(json.projectPath);
-    const agents = config.agents as Record<string, unknown>[];
+    const agents = config.runtimes as Record<string, unknown>[];
     expect(agents.length).toBe(1);
     expect(agents[0]!.name).toBe(agentName);
   });

@@ -1,7 +1,7 @@
 import { ConfigIO, getWorkingDirectory } from '../../../../lib';
-import type { AgentCoreProjectSpec } from '../../../../schema';
 import { findStack } from '../../../cloudformation/stack-discovery';
 import { getErrorMessage } from '../../../errors';
+import { createDefaultProjectSpec } from '../../../project';
 import { type Step, areStepsComplete, hasStepError } from '../../components';
 import { withMinDuration } from '../../utils';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -25,20 +25,6 @@ interface RemoveFlowState {
 
 function getRemoveSteps(): Step[] {
   return [{ label: 'Reset project schemas', status: 'pending' }];
-}
-
-function createDefaultProjectSpec(projectName: string): AgentCoreProjectSpec {
-  return {
-    name: projectName,
-    version: 1,
-    agents: [],
-    memories: [],
-    credentials: [],
-    evaluators: [],
-    onlineEvalConfigs: [],
-    agentCoreGateways: [],
-    policyEngines: [],
-  };
 }
 
 export function useRemoveFlow({ force, dryRun }: RemoveFlowOptions): RemoveFlowState {
@@ -71,8 +57,8 @@ export function useRemoveFlow({ force, dryRun }: RemoveFlowOptions): RemoveFlowS
         setProjectName(projectSpec.name);
         items.push(`AgentCore project: ${projectSpec.name}`);
 
-        if (projectSpec.agents && projectSpec.agents.length > 0) {
-          items.push(`${projectSpec.agents.length} agent definition${projectSpec.agents.length > 1 ? 's' : ''}`);
+        if (projectSpec.runtimes && projectSpec.runtimes.length > 0) {
+          items.push(`${projectSpec.runtimes.length} agent definition${projectSpec.runtimes.length > 1 ? 's' : ''}`);
         }
         if (projectSpec.memories && projectSpec.memories.length > 0) {
           items.push(`${projectSpec.memories.length} memory provider${projectSpec.memories.length > 1 ? 's' : ''}`);

@@ -43,9 +43,9 @@ describe('resolveAgentContext', () => {
     project: {
       name: 'TestProject',
       version: 1,
-      agents: [
+      managedBy: 'CDK' as const,
+      runtimes: [
         {
-          type: 'AgentCoreRuntime' as const,
           name: 'MyAgent',
           build: 'CodeZip' as const,
           entrypoint: 'main.py' as any,
@@ -65,7 +65,7 @@ describe('resolveAgentContext', () => {
       targets: {
         default: {
           resources: {
-            agents: {
+            runtimes: {
               MyAgent: {
                 runtimeId: 'rt-123',
                 runtimeArn: 'arn:aws:bedrock:us-east-1:123:runtime/rt-123',
@@ -96,9 +96,9 @@ describe('resolveAgentContext', () => {
       project: {
         name: 'TestProject',
         version: 1,
-        agents: [
+        managedBy: 'CDK' as const,
+        runtimes: [
           {
-            type: 'AgentCoreRuntime' as const,
             name: 'AgentA',
             build: 'CodeZip' as const,
             entrypoint: 'main.py' as any,
@@ -107,7 +107,6 @@ describe('resolveAgentContext', () => {
             protocol: 'HTTP' as const,
           },
           {
-            type: 'AgentCoreRuntime' as const,
             name: 'AgentB',
             build: 'CodeZip' as const,
             entrypoint: 'main.py' as any,
@@ -127,7 +126,7 @@ describe('resolveAgentContext', () => {
     const result = resolveAgentContext(context, {});
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain('Multiple agents found');
+      expect(result.error).toContain('Multiple runtimes found');
       expect(result.error).toContain('AgentA');
       expect(result.error).toContain('AgentB');
     }
@@ -138,9 +137,9 @@ describe('resolveAgentContext', () => {
       project: {
         name: 'TestProject',
         version: 1,
-        agents: [
+        managedBy: 'CDK' as const,
+        runtimes: [
           {
-            type: 'AgentCoreRuntime' as const,
             name: 'AgentA',
             build: 'CodeZip' as const,
             entrypoint: 'main.py' as any,
@@ -149,7 +148,6 @@ describe('resolveAgentContext', () => {
             protocol: 'HTTP' as const,
           },
           {
-            type: 'AgentCoreRuntime' as const,
             name: 'AgentB',
             build: 'CodeZip' as const,
             entrypoint: 'main.py' as any,
@@ -169,7 +167,7 @@ describe('resolveAgentContext', () => {
         targets: {
           default: {
             resources: {
-              agents: {
+              runtimes: {
                 AgentA: {
                   runtimeId: 'rt-aaa',
                   runtimeArn: 'arn:aws:bedrock:us-east-1:123:runtime/rt-aaa',
@@ -186,7 +184,7 @@ describe('resolveAgentContext', () => {
         },
       },
     });
-    const result = resolveAgentContext(context, { agent: 'AgentB' });
+    const result = resolveAgentContext(context, { runtime: 'AgentB' });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.agentContext.agentName).toBe('AgentB');
@@ -195,10 +193,10 @@ describe('resolveAgentContext', () => {
   });
 
   it('errors for unknown agent name', () => {
-    const result = resolveAgentContext(makeContext(), { agent: 'UnknownAgent' });
+    const result = resolveAgentContext(makeContext(), { runtime: 'UnknownAgent' });
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain("Agent 'UnknownAgent' not found");
+      expect(result.error).toContain("Runtime 'UnknownAgent' not found");
     }
   });
 
@@ -207,7 +205,8 @@ describe('resolveAgentContext', () => {
       project: {
         name: 'TestProject',
         version: 1,
-        agents: [],
+        managedBy: 'CDK' as const,
+        runtimes: [],
         memories: [],
         credentials: [],
         evaluators: [],
@@ -219,7 +218,7 @@ describe('resolveAgentContext', () => {
     const result = resolveAgentContext(context, {});
     expect(result.success).toBe(false);
     if (!result.success) {
-      expect(result.error).toContain('No agents defined');
+      expect(result.error).toContain('No runtimes defined');
     }
   });
 
@@ -229,7 +228,7 @@ describe('resolveAgentContext', () => {
         targets: {
           default: {
             resources: {
-              agents: {},
+              runtimes: {},
             },
           },
         },

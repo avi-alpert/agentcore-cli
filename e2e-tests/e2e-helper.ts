@@ -9,6 +9,8 @@ import {
 import {
   BedrockAgentCoreControlClient,
   DeleteApiKeyCredentialProviderCommand,
+  GetAgentRuntimeCommand,
+  ListApiKeyCredentialProvidersCommand,
 } from '@aws-sdk/client-bedrock-agentcore-control';
 import { execSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
@@ -25,6 +27,12 @@ interface E2EConfig {
   modelProvider: string;
   requiredEnvVar?: string;
   build?: string;
+  memory?: string;
+  /** Lifecycle configuration to pass via --idle-timeout / --max-lifetime flags. */
+  lifecycleConfig?: {
+    idleTimeout?: number;
+    maxLifetime?: number;
+  };
 }
 
 export function createE2ESuite(cfg: E2EConfig) {
@@ -38,6 +46,8 @@ export function createE2ESuite(cfg: E2EConfig) {
 
     beforeAll(async () => {
       if (!canRun) return;
+
+      await cleanupStaleCredentialProviders();
 
       testDir = join(tmpdir(), `agentcore-e2e-${randomUUID()}`);
       await mkdir(testDir, { recursive: true });
@@ -54,12 +64,19 @@ export function createE2ESuite(cfg: E2EConfig) {
         '--model-provider',
         cfg.modelProvider,
         '--memory',
-        'none',
+        cfg.memory ?? 'none',
         '--json',
       ];
 
       if (cfg.build) {
         createArgs.push('--build', cfg.build);
+      }
+
+      if (cfg.lifecycleConfig?.idleTimeout !== undefined) {
+        createArgs.push('--idle-timeout', String(cfg.lifecycleConfig.idleTimeout));
+      }
+      if (cfg.lifecycleConfig?.maxLifetime !== undefined) {
+        createArgs.push('--max-lifetime', String(cfg.lifecycleConfig.maxLifetime));
       }
 
       // Pass API key so the credential is registered in the project and .env.local
@@ -125,7 +142,7 @@ export function createE2ESuite(cfg: E2EConfig) {
         await retry(
           async () => {
             const result = await runAgentCoreCLI(
-              ['invoke', '--prompt', 'Say hello', '--agent', agentName, '--json'],
+              ['invoke', '--prompt', 'Say hello', '--runtime', agentName, '--json'],
               projectPath
             );
 
@@ -188,7 +205,7 @@ export function createE2ESuite(cfg: E2EConfig) {
       async () => {
         expect(runtimeId, 'Runtime ID should have been extracted from status').toBeTruthy();
 
-        const result = await run(['status', '--agent-runtime-id', runtimeId, '--json']);
+        const result = await run(['status', '--runtime-id', runtimeId, '--json']);
 
         expect(result.exitCode, `Runtime lookup failed: ${result.stderr}`).toBe(0);
 
@@ -210,7 +227,7 @@ export function createE2ESuite(cfg: E2EConfig) {
         await retry(
           async () => {
             // --since 1h triggers search mode (avoids live tail)
-            const result = await run(['logs', '--agent', agentName, '--since', '1h', '--json']);
+            const result = await run(['logs', '--runtime', agentName, '--since', '1h', '--json']);
 
             expect(result.exitCode, `Logs failed: ${result.stderr}`).toBe(0);
 
@@ -237,7 +254,7 @@ export function createE2ESuite(cfg: E2EConfig) {
       'logs supports level filtering',
       async () => {
         // --level error should succeed even if no error-level logs exist
-        const result = await run(['logs', '--agent', agentName, '--since', '1h', '--level', 'error', '--json']);
+        const result = await run(['logs', '--runtime', agentName, '--since', '1h', '--level', 'error', '--json']);
 
         expect(result.exitCode, `Logs --level failed: ${result.stderr}`).toBe(0);
       },
@@ -250,7 +267,7 @@ export function createE2ESuite(cfg: E2EConfig) {
         // traces list has no --json flag — verify exit code and non-empty output
         await retry(
           async () => {
-            const result = await run(['traces', 'list', '--agent', agentName, '--since', '1h']);
+            const result = await run(['traces', 'list', '--runtime', agentName, '--since', '1h']);
 
             expect(result.exitCode, `Traces list failed (stderr: ${result.stderr})`).toBe(0);
             expect(result.stdout.length, 'Traces list should produce output').toBeGreaterThan(0);
@@ -261,6 +278,30 @@ export function createE2ESuite(cfg: E2EConfig) {
       },
       120000
     );
+
+    // ── Lifecycle configuration verification ─────────────────────────
+    if (cfg.lifecycleConfig) {
+      it.skipIf(!canRun)(
+        'runtime has lifecycle configuration set via AWS API',
+        async () => {
+          expect(runtimeId, 'Runtime ID should have been extracted from status').toBeTruthy();
+
+          // Query the runtime via AWS API to verify lifecycle config
+          const region = process.env.AWS_REGION ?? 'us-east-1';
+          const client = new BedrockAgentCoreControlClient({ region });
+          const response = await client.send(new GetAgentRuntimeCommand({ agentRuntimeId: runtimeId }));
+
+          expect(response.lifecycleConfiguration).toBeDefined();
+          if (cfg.lifecycleConfig!.idleTimeout !== undefined) {
+            expect(response.lifecycleConfiguration!.idleRuntimeSessionTimeout).toBe(cfg.lifecycleConfig!.idleTimeout);
+          }
+          if (cfg.lifecycleConfig!.maxLifetime !== undefined) {
+            expect(response.lifecycleConfiguration!.maxLifetime).toBe(cfg.lifecycleConfig!.maxLifetime);
+          }
+        },
+        180000
+      );
+    }
   });
 }
 
@@ -291,6 +332,38 @@ export function installCdkTarball(projectPath: string): void {
   }
 }
 
+async function deleteCredentialProvider(client: BedrockAgentCoreControlClient, name: string): Promise<void> {
+  try {
+    await client.send(new DeleteApiKeyCredentialProviderCommand({ name }));
+    console.log(`Deleted credential provider: ${name}`);
+  } catch (error) {
+    const code = (error as { name?: string }).name ?? 'Unknown';
+    console.warn(`Failed to delete credential provider ${name}: [${code}]`);
+  }
+}
+
+/**
+ * Delete stale E2e* credential providers older than the given max age.
+ * Runs in beforeAll to prevent accumulation from previous runs that
+ * crashed or timed out before their afterAll teardown could execute.
+ */
+export async function cleanupStaleCredentialProviders(maxAgeMs: number = 30 * 60 * 1000): Promise<void> {
+  const region = process.env.AWS_REGION ?? 'us-east-1';
+  const client = new BedrockAgentCoreControlClient({ region });
+  const cutoff = new Date(Date.now() - maxAgeMs);
+
+  let nextToken: string | undefined;
+  do {
+    const response = await client.send(new ListApiKeyCredentialProvidersCommand({ nextToken }));
+    const providers = response.credentialProviders ?? [];
+    const stale = providers.filter(p => p.name?.startsWith('E2e') && p.createdTime && p.createdTime < cutoff);
+
+    await Promise.all(stale.map(p => deleteCredentialProvider(client, p.name!)));
+
+    nextToken = response.nextToken;
+  } while (nextToken);
+}
+
 export async function teardownE2EProject(projectPath: string, agentName: string, modelProvider: string): Promise<void> {
   await spawnAndCollect('agentcore', ['remove', 'all', '--json'], projectPath);
   const result = await spawnAndCollect('agentcore', ['deploy', '--yes', '--json'], projectPath);
@@ -299,13 +372,8 @@ export async function teardownE2EProject(projectPath: string, agentName: string,
     console.log('Teardown stderr:', result.stderr);
   }
   if (modelProvider !== 'Bedrock' && agentName) {
-    const providerName = `${agentName}${modelProvider}`;
     const region = process.env.AWS_REGION ?? 'us-east-1';
-    try {
-      const client = new BedrockAgentCoreControlClient({ region });
-      await client.send(new DeleteApiKeyCredentialProviderCommand({ name: providerName }));
-    } catch {
-      // Best-effort cleanup
-    }
+    const client = new BedrockAgentCoreControlClient({ region });
+    await deleteCredentialProvider(client, `${agentName}${modelProvider}`);
   }
 }

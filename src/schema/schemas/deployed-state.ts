@@ -1,5 +1,5 @@
+import { CustomClaimValidationSchema } from './auth';
 import { DeploymentTargetNameSchema } from './aws-targets';
-import { CustomClaimValidationSchema } from './mcp';
 import { z } from 'zod';
 
 // ============================================================================
@@ -173,7 +173,7 @@ export type OnlineEvalDeployedState = z.infer<typeof OnlineEvalDeployedStateSche
 // ============================================================================
 
 export const DeployedResourceStateSchema = z.object({
-  agents: z.record(z.string(), AgentCoreDeployedStateSchema).optional(),
+  runtimes: z.record(z.string(), AgentCoreDeployedStateSchema).optional(),
   memories: z.record(z.string(), MemoryDeployedStateSchema).optional(),
   mcp: McpDeployedStateSchema.optional(),
   externallyManaged: ExternallyManagedStateSchema.optional(),

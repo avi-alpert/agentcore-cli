@@ -13,8 +13,9 @@
 interface AgentCoreProjectSpec {
   name: string; // @regex ^[A-Za-z][A-Za-z0-9]{0,22}$ @max 23 - project name
   version: number; // Schema version (integer)
+  managedBy: 'CDK'; // Enum — infrastructure manager. Default: "CDK"
   tags?: Record<string, string>;
-  agents: AgentEnvSpec[]; // Unique by name
+  runtimes: AgentEnvSpec[]; // Unique by name
   memories: Memory[]; // Unique by name
   credentials: Credential[]; // Unique by name
 }
@@ -33,7 +34,7 @@ interface NetworkConfig {
   securityGroups: string[]; // sg-xxx IDs
 }
 
-type MemoryStrategyType = 'SEMANTIC' | 'SUMMARIZATION' | 'USER_PREFERENCE';
+type MemoryStrategyType = 'SEMANTIC' | 'SUMMARIZATION' | 'USER_PREFERENCE' | 'EPISODIC';
 type ModelProvider = 'Bedrock' | 'Gemini' | 'OpenAI' | 'Anthropic';
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -41,7 +42,6 @@ type ModelProvider = 'Bedrock' | 'Gemini' | 'OpenAI' | 'Anthropic';
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface AgentEnvSpec {
-  type: 'AgentCoreRuntime';
   name: string; // @regex ^[a-zA-Z][a-zA-Z0-9_]{0,47}$ @max 48
   build: BuildType;
   entrypoint: string; // @regex ^[a-zA-Z0-9_][a-zA-Z0-9_/.-]*\.(py|ts|js)(:[a-zA-Z_][a-zA-Z0-9_]*)?$ e.g. "main.py:handler" or "index.ts"
@@ -51,7 +51,6 @@ interface AgentEnvSpec {
   networkMode?: NetworkMode; // default 'PUBLIC'
   networkConfig?: NetworkConfig; // Required when networkMode is 'VPC'
   instrumentation?: Instrumentation; // OTel settings
-  modelProvider?: ModelProvider; // Model provider used by this agent
   tags?: Record<string, string>;
 }
 
@@ -69,7 +68,6 @@ interface EnvVar {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Memory {
-  type: 'AgentCoreMemory';
   name: string; // @regex ^[a-zA-Z][a-zA-Z0-9_]{0,47}$ @max 48
   eventExpiryDuration: number; // @min 7 @max 365 (days)
   strategies: MemoryStrategy[]; // @min 1, unique by type
@@ -81,6 +79,7 @@ interface MemoryStrategy {
   name?: string; // @regex ^[a-zA-Z][a-zA-Z0-9_]{0,47}$ @max 48
   description?: string;
   namespaces?: string[];
+  reflectionNamespaces?: string[]; // EPISODIC only: namespaces for cross-episode reflections
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -88,6 +87,6 @@ interface MemoryStrategy {
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface Credential {
-  type: 'ApiKeyCredentialProvider';
-  name: string; // @regex ^[A-Za-z0-9_.-]+$ @min 3 @max 255
+  authorizerType: 'ApiKeyCredentialProvider' | 'OAuthCredentialProvider';
+  name: string; // @regex ^[a-zA-Z0-9\-_]+$ @min 1 @max 128
 }

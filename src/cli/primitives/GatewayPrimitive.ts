@@ -1,4 +1,4 @@
-import { findConfigRoot, setEnvVar } from '../../lib';
+import { findConfigRoot } from '../../lib';
 import type {
   AgentCoreGateway,
   AgentCoreGatewayTarget,
@@ -14,8 +14,8 @@ import { getErrorMessage } from '../errors';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
 import type { AddGatewayConfig } from '../tui/screens/mcp/types';
 import { BasePrimitive } from './BasePrimitive';
+import { buildAuthorizerConfigFromJwtConfig, createManagedOAuthCredential } from './auth-utils';
 import { SOURCE_CODE_NOTE } from './constants';
-import { computeDefaultCredentialEnvVarName, computeManagedOAuthCredentialName } from './credential-utils';
 import type { AddResult, AddScreenComponent, RemovableResource } from './types';
 import type { Command } from '@commander-js/extra-typings';
 
@@ -33,7 +33,7 @@ export interface AddGatewayOptions {
   customClaims?: CustomClaimValidation[];
   clientId?: string;
   clientSecret?: string;
-  agents?: string;
+  runtimes?: string;
   enableSemanticSearch?: boolean;
   exceptionLevel?: string;
   policyEngine?: string;
@@ -158,23 +158,27 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
   registerCommands(addCmd: Command, removeCmd: Command): void {
     addCmd
       .command('gateway')
-      .description('Add a gateway to the project')
-      .option('--name <name>', 'Gateway name')
-      .option('--description <desc>', 'Gateway description')
-      .option('--authorizer-type <type>', 'Authorizer type: NONE or CUSTOM_JWT')
-      .option('--discovery-url <url>', 'OIDC discovery URL (for CUSTOM_JWT)')
-      .option('--allowed-audience <audience>', 'Comma-separated allowed audiences (for CUSTOM_JWT)')
-      .option('--allowed-clients <clients>', 'Comma-separated allowed client IDs (for CUSTOM_JWT)')
-      .option('--allowed-scopes <scopes>', 'Comma-separated allowed scopes (for CUSTOM_JWT)')
-      .option('--custom-claims <json>', 'Custom claim validations as JSON array (for CUSTOM_JWT)')
-      .option('--client-id <id>', 'OAuth client ID for gateway bearer token')
-      .option('--client-secret <secret>', 'OAuth client secret')
-      .option('--agents <agents>', 'Comma-separated agent names')
-      .option('--no-semantic-search', 'Disable semantic search for tool discovery')
-      .option('--exception-level <level>', 'Exception verbosity level', 'NONE')
-      .option('--policy-engine <name>', 'Policy engine name for Cedar-based authorization')
-      .option('--policy-engine-mode <mode>', 'Policy engine mode: LOG_ONLY or ENFORCE')
-      .option('--json', 'Output as JSON')
+      .description('Add an API gateway that routes requests to agent targets')
+      .option('--name <name>', 'Gateway name [non-interactive]')
+      .option('--description <desc>', 'Gateway description [non-interactive]')
+      .option('--runtimes <runtimes>', 'Comma-separated runtime names to expose through this gateway [non-interactive]')
+      .option('--authorizer-type <type>', 'Authorizer type: NONE or CUSTOM_JWT [non-interactive]')
+      .option('--discovery-url <url>', 'OIDC discovery URL (for CUSTOM_JWT) [non-interactive]')
+      .option('--allowed-audience <audience>', 'Comma-separated allowed audiences (for CUSTOM_JWT) [non-interactive]')
+      .option('--allowed-clients <clients>', 'Comma-separated allowed client IDs (for CUSTOM_JWT) [non-interactive]')
+      .option('--allowed-scopes <scopes>', 'Comma-separated allowed scopes (for CUSTOM_JWT) [non-interactive]')
+      .option('--custom-claims <json>', 'Custom claim validations as JSON array (for CUSTOM_JWT) [non-interactive]')
+      .option('--client-id <id>', 'OAuth client ID for fetching gateway bearer tokens [non-interactive]')
+      .option('--client-secret <secret>', 'OAuth client secret for fetching gateway bearer tokens [non-interactive]')
+      .option('--no-semantic-search', 'Disable semantic search for gateway target tool discovery [non-interactive]')
+      .option(
+        '--exception-level <level>',
+        'Exception detail level in error responses: NONE, ALL [non-interactive]',
+        'NONE'
+      )
+      .option('--policy-engine <name>', 'Policy engine name for Cedar-based authorization [non-interactive]')
+      .option('--policy-engine-mode <mode>', 'Policy engine mode: LOG_ONLY or ENFORCE [non-interactive]')
+      .option('--json', 'Output as JSON [non-interactive]')
       .action(async (rawOptions: Record<string, string | boolean | undefined>) => {
         const cliOptions = rawOptions as unknown as CLIAddGatewayOptions;
         try {
@@ -209,7 +213,7 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
             customClaims: parsedCustomClaims,
             clientId: cliOptions.clientId,
             clientSecret: cliOptions.clientSecret,
-            agents: cliOptions.agents,
+            runtimes: cliOptions.runtimes,
             enableSemanticSearch: cliOptions.semanticSearch !== false,
             exceptionLevel: cliOptions.exceptionLevel,
             policyEngine: cliOptions.policyEngine,
@@ -238,17 +242,17 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
     removeCmd
       .command('gateway')
       .description('Remove a gateway from the project')
-      .option('--name <name>', 'Name of resource to remove')
-      .option('--force', 'Skip confirmation prompt')
-      .option('--json', 'Output as JSON')
-      .action(async (cliOptions: { name?: string; force?: boolean; json?: boolean }) => {
+      .option('--name <name>', 'Name of resource to remove [non-interactive]')
+      .option('-y, --yes', 'Skip confirmation prompt [non-interactive]')
+      .option('--json', 'Output as JSON [non-interactive]')
+      .action(async (cliOptions: { name?: string; yes?: boolean; json?: boolean }) => {
         try {
           if (!findConfigRoot()) {
             console.error('No agentcore project found. Run `agentcore create` first.');
             process.exit(1);
           }
 
-          if (cliOptions.name || cliOptions.force || cliOptions.json) {
+          if (cliOptions.name || cliOptions.yes || cliOptions.json) {
             if (!cliOptions.name) {
               console.log(JSON.stringify({ success: false, error: '--name is required' }));
               process.exit(1);
@@ -275,7 +279,7 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
             const { clear, unmount } = render(
               React.createElement(RemoveFlow, {
                 isInteractive: false,
-                force: cliOptions.force,
+                force: cliOptions.yes,
                 initialResourceType: this.kind,
                 initialResourceName: cliOptions.name,
                 onExit: () => {
@@ -382,7 +386,10 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
       description: config.description,
       targets: movedTargets,
       authorizerType: config.authorizerType,
-      authorizerConfiguration: this.buildAuthorizerConfiguration(config),
+      authorizerConfiguration:
+        config.authorizerType === 'CUSTOM_JWT' && config.jwtConfig
+          ? buildAuthorizerConfigFromJwtConfig(config.jwtConfig)
+          : undefined,
       enableSemanticSearch: config.enableSemanticSearch,
       exceptionLevel: config.exceptionLevel,
       policyEngineConfiguration: config.policyEngineConfiguration,
@@ -393,61 +400,15 @@ export class GatewayPrimitive extends BasePrimitive<AddGatewayOptions, Removable
 
     // Auto-create OAuth credential if client credentials are provided
     if (config.jwtConfig?.clientId && config.jwtConfig?.clientSecret) {
-      await this.createManagedOAuthCredential(config.name, config.jwtConfig);
+      await createManagedOAuthCredential(
+        config.name,
+        config.jwtConfig,
+        spec => this.writeProjectSpec(spec),
+        () => this.readProjectSpec()
+      );
     }
 
     return { name: config.name };
-  }
-
-  /**
-   * Auto-create a managed OAuth credential for gateway inbound auth.
-   * Stores the credential in agentcore.json and writes the client ID and client secret to .env.
-   */
-  private async createManagedOAuthCredential(
-    gatewayName: string,
-    jwtConfig: NonNullable<AddGatewayConfig['jwtConfig']>
-  ): Promise<void> {
-    const credentialName = computeManagedOAuthCredentialName(gatewayName);
-    const project = await this.readProjectSpec();
-
-    // Skip if credential already exists
-    if (project.credentials.some(c => c.name === credentialName)) {
-      return;
-    }
-
-    project.credentials.push({
-      type: 'OAuthCredentialProvider',
-      name: credentialName,
-      discoveryUrl: jwtConfig.discoveryUrl,
-      vendor: 'CustomOauth2',
-      managed: true,
-      usage: 'inbound',
-    });
-    await this.writeProjectSpec(project);
-
-    // Write client ID and client secret to .env
-    const envVarPrefix = computeDefaultCredentialEnvVarName(credentialName);
-    await setEnvVar(`${envVarPrefix}_CLIENT_ID`, jwtConfig.clientId!);
-    await setEnvVar(`${envVarPrefix}_CLIENT_SECRET`, jwtConfig.clientSecret!);
-  }
-
-  /**
-   * Build authorizer configuration from wizard config.
-   */
-  private buildAuthorizerConfiguration(config: AddGatewayConfig): AgentCoreGateway['authorizerConfiguration'] {
-    if (config.authorizerType !== 'CUSTOM_JWT' || !config.jwtConfig) {
-      return undefined;
-    }
-
-    return {
-      customJwtAuthorizer: {
-        discoveryUrl: config.jwtConfig.discoveryUrl,
-        ...(config.jwtConfig.allowedAudience?.length ? { allowedAudience: config.jwtConfig.allowedAudience } : {}),
-        ...(config.jwtConfig.allowedClients?.length ? { allowedClients: config.jwtConfig.allowedClients } : {}),
-        ...(config.jwtConfig.allowedScopes?.length ? { allowedScopes: config.jwtConfig.allowedScopes } : {}),
-        ...(config.jwtConfig.customClaims?.length ? { customClaims: config.jwtConfig.customClaims } : {}),
-      },
-    };
   }
 
   /**

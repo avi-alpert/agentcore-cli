@@ -90,20 +90,20 @@ export async function createMinimalProjectDir(
   const config: Record<string, unknown> = {
     name: projectName,
     version: 1,
-    agents: [] as unknown[],
+    managedBy: 'CDK',
+    runtimes: [] as unknown[],
     memories: [],
     credentials: [],
   };
 
   // Optionally add a sample agent.
   if (hasAgents) {
-    (config.agents as unknown[]).push({
-      type: 'AgentCoreRuntime',
+    (config.runtimes as unknown[]).push({
       name: 'TestAgent',
       build: 'CodeZip',
       entrypoint: 'main.py:handler',
       codeLocation: 'app/TestAgent',
-      runtimeVersion: 'PYTHON_3_12',
+      runtimeVersion: 'PYTHON_3_13',
     });
 
     // Create the agent code directory so the CLI does not complain.

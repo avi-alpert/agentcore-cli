@@ -143,7 +143,7 @@ export class PolicyEnginePrimitive extends BasePrimitive<AddPolicyEngineOptions,
   }
 
   /**
-   * Attach a policy engine to the specified gateways in mcp.json.
+   * Attach a policy engine to the specified gateways in agentcore.json.
    */
   async attachToGateways(engineName: string, gatewayNames: string[], mode: 'LOG_ONLY' | 'ENFORCE'): Promise<void> {
     if (gatewayNames.length === 0) return;
@@ -205,8 +205,11 @@ export class PolicyEnginePrimitive extends BasePrimitive<AddPolicyEngineOptions,
       .option('--name <name>', 'Policy engine name [non-interactive]')
       .option('--description <desc>', 'Policy engine description [non-interactive]')
       .option('--encryption-key-arn <arn>', 'KMS encryption key ARN [non-interactive]')
-      .option('--attach-to-gateways <gateways>', 'Comma-separated gateway names to attach this engine to')
-      .option('--attach-mode <mode>', 'Enforcement mode for attached gateways: LOG_ONLY or ENFORCE')
+      .option(
+        '--attach-to-gateways <gateways>',
+        'Comma-separated gateway names to attach this engine to [non-interactive]'
+      )
+      .option('--attach-mode <mode>', 'Enforcement mode for attached gateways: LOG_ONLY or ENFORCE [non-interactive]')
       .option('--json', 'Output as JSON [non-interactive]')
       .action(
         async (cliOptions: {
@@ -289,16 +292,16 @@ export class PolicyEnginePrimitive extends BasePrimitive<AddPolicyEngineOptions,
       .command('policy-engine')
       .description('Remove a policy engine from the project')
       .option('--name <name>', 'Name of resource to remove [non-interactive]')
-      .option('--force', 'Skip confirmation prompt [non-interactive]')
+      .option('-y, --yes', 'Skip confirmation prompt [non-interactive]')
       .option('--json', 'Output as JSON [non-interactive]')
-      .action(async (cliOptions: { name?: string; force?: boolean; json?: boolean }) => {
+      .action(async (cliOptions: { name?: string; yes?: boolean; json?: boolean }) => {
         try {
           if (!findConfigRoot()) {
             console.error('No agentcore project found. Run `agentcore create` first.');
             process.exit(1);
           }
 
-          if (cliOptions.name || cliOptions.force || cliOptions.json) {
+          if (cliOptions.name || cliOptions.yes || cliOptions.json) {
             if (!cliOptions.name) {
               console.log(JSON.stringify({ success: false, error: '--name is required' }));
               process.exit(1);
@@ -331,7 +334,7 @@ export class PolicyEnginePrimitive extends BasePrimitive<AddPolicyEngineOptions,
             const { clear, unmount } = render(
               React.createElement(RemoveFlow, {
                 isInteractive: false,
-                force: cliOptions.force,
+                force: cliOptions.yes,
                 initialResourceType: this.kind,
                 initialResourceName: cliOptions.name,
                 onExit: () => {
