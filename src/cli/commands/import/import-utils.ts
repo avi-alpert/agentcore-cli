@@ -4,7 +4,8 @@ import { detectAccount, validateAwsCredentials } from '../../aws/account';
 import { ExecLogger } from '../../logging';
 import { setupPythonProject } from '../../operations/python/setup';
 import { getTemplatePath } from '../../templates/templateRoot';
-import type { ImportResourceOptions, ImportResourceResult } from './types';
+import { ANSI } from './constants';
+import type { ImportResourceOptions, ImportResourceResult, ImportableResourceType } from './types';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
@@ -12,8 +13,7 @@ import * as path from 'node:path';
 // Import Context (shared setup for import-runtime / import-memory)
 // ============================================================================
 
-const green = '\x1b[32m';
-const reset = '\x1b[0m';
+const { green, reset } = ANSI;
 
 export interface ImportContext {
   ctx: ProjectContext;
@@ -60,7 +60,7 @@ export async function resolveImportContext(options: ImportResourceOptions, comma
 export function failResult(
   logger: ExecLogger,
   error: string,
-  resourceType: 'runtime' | 'memory',
+  resourceType: ImportableResourceType,
   resourceName: string
 ): ImportResourceResult {
   logger.endStep('error', error);
@@ -128,9 +128,12 @@ export async function resolveImportTarget(options: ResolveTargetOptions): Promis
   const { configIO, targetName, arn, onProgress } = options;
 
   // Validate ARN format early if provided
-  if (arn && !/^arn:aws:bedrock-agentcore:([^:]+):([^:]+):(runtime|memory)\/(.+)$/.test(arn)) {
+  if (
+    arn &&
+    !/^arn:aws:bedrock-agentcore:([^:]+):([^:]+):(runtime|memory|evaluator|online-evaluation-config)\/(.+)$/.test(arn)
+  ) {
     throw new Error(
-      `Not a valid ARN: "${arn}".\nExpected format: arn:aws:bedrock-agentcore:<region>:<account>:<runtime|memory>/<id>`
+      `Not a valid ARN: "${arn}".\nExpected format: arn:aws:bedrock-agentcore:<region>:<account>:<runtime|memory|evaluator|online-evaluation-config>/<id>`
     );
   }
 
@@ -206,7 +209,27 @@ export interface ParsedArn {
   resourceId: string;
 }
 
-const ARN_PATTERN = /^arn:aws:bedrock-agentcore:([^:]+):([^:]+):(runtime|memory)\/(.+)$/;
+const ARN_PATTERN =
+  /^arn:aws:bedrock-agentcore:([^:]+):([^:]+):(runtime|memory|evaluator|online-evaluation-config)\/(.+)$/;
+
+/** Unified config for each importable resource type — ARN mapping, deployed state keys. */
+const RESOURCE_TYPE_CONFIG: Record<
+  ImportableResourceType,
+  {
+    arnType: string;
+    collectionKey: string;
+    idField: string;
+  }
+> = {
+  runtime: { arnType: 'runtime', collectionKey: 'runtimes', idField: 'runtimeId' },
+  memory: { arnType: 'memory', collectionKey: 'memories', idField: 'memoryId' },
+  evaluator: { arnType: 'evaluator', collectionKey: 'evaluators', idField: 'evaluatorId' },
+  'online-eval': {
+    arnType: 'online-evaluation-config',
+    collectionKey: 'onlineEvalConfigs',
+    idField: 'onlineEvaluationConfigId',
+  },
+};
 
 /**
  * Parse and validate a BedrockAgentCore ARN.
@@ -214,20 +237,21 @@ const ARN_PATTERN = /^arn:aws:bedrock-agentcore:([^:]+):([^:]+):(runtime|memory)
  */
 export function parseAndValidateArn(
   arn: string,
-  expectedResourceType: 'runtime' | 'memory',
+  expectedResourceType: ImportableResourceType,
   target: { region: string; account: string }
 ): ParsedArn {
   const match = ARN_PATTERN.exec(arn);
+  const expectedArnType = RESOURCE_TYPE_CONFIG[expectedResourceType].arnType;
   if (!match) {
     throw new Error(
-      `Invalid ARN format: "${arn}". Expected format: arn:aws:bedrock-agentcore:<region>:<account>:${expectedResourceType}/<id>`
+      `Invalid ARN format: "${arn}". Expected format: arn:aws:bedrock-agentcore:<region>:<account>:${expectedArnType}/<id>`
     );
   }
 
   const [, region, account, resourceType, resourceId] = match;
 
-  if (resourceType !== expectedResourceType) {
-    throw new Error(`ARN resource type "${resourceType}" does not match expected type "${expectedResourceType}".`);
+  if (resourceType !== expectedArnType) {
+    throw new Error(`ARN resource type "${resourceType}" does not match expected type "${expectedArnType}".`);
   }
 
   if (region !== target.region) {
@@ -268,7 +292,7 @@ export function toStackName(projectName: string, targetName: string): string {
 export async function findResourceInDeployedState(
   configIO: ConfigIO,
   targetName: string,
-  resourceType: 'runtime' | 'memory',
+  resourceType: ImportableResourceType,
   resourceId: string
 ): Promise<string | undefined> {
   /* eslint-disable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
@@ -276,11 +300,11 @@ export async function findResourceInDeployedState(
   const targetState = state.targets?.[targetName];
   if (!targetState?.resources) return undefined;
 
-  const collection = resourceType === 'runtime' ? targetState.resources.runtimes : targetState.resources.memories;
-  if (!collection) return undefined;
+  const { collectionKey, idField } = RESOURCE_TYPE_CONFIG[resourceType];
 
+  const collection = targetState.resources[collectionKey];
+  if (!collection) return undefined;
   for (const [name, entry] of Object.entries(collection)) {
-    const idField = resourceType === 'runtime' ? 'runtimeId' : 'memoryId';
     if ((entry as any)[idField] === resourceId) return name;
   }
   /* eslint-enable @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument, @typescript-eslint/no-explicit-any */
@@ -289,7 +313,7 @@ export async function findResourceInDeployedState(
 }
 
 export interface ImportedResource {
-  type: 'runtime' | 'memory';
+  type: ImportableResourceType;
   name: string;
   id: string;
   arn: string;
@@ -323,6 +347,18 @@ export async function updateDeployedState(
       targetState.resources.memories[resource.name] = {
         memoryId: resource.id,
         memoryArn: resource.arn,
+      };
+    } else if (resource.type === 'evaluator') {
+      targetState.resources.evaluators ??= {};
+      targetState.resources.evaluators[resource.name] = {
+        evaluatorId: resource.id,
+        evaluatorArn: resource.arn,
+      };
+    } else if (resource.type === 'online-eval') {
+      targetState.resources.onlineEvalConfigs ??= {};
+      targetState.resources.onlineEvalConfigs[resource.name] = {
+        onlineEvaluationConfigId: resource.id,
+        onlineEvaluationConfigArn: resource.arn,
       };
     }
   }
@@ -377,7 +413,6 @@ export function fixPyprojectForSetuptools(pyprojectPath: string): void {
 
   const content = fs.readFileSync(pyprojectPath, 'utf-8');
 
-  // Already has [tool.setuptools] section — don't touch it
   if (content.includes('[tool.setuptools]')) return;
 
   // Append the fix
@@ -409,7 +444,6 @@ export async function copyAgentSource(options: CopyAgentSourceOptions): Promise<
     onProgress?.(`Copying agent source from ${sourcePath} to ./${APP_DIR}/${agentName}`);
     copyDirRecursive(sourcePath, appDir);
 
-    // Also copy pyproject.toml from the parent of source_path if it exists
     const parentPyproject = path.join(path.dirname(sourcePath), 'pyproject.toml');
     const destPyproject = path.join(appDir, 'pyproject.toml');
     if (fs.existsSync(parentPyproject) && !fs.existsSync(destPyproject)) {

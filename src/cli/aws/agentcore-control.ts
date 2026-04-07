@@ -1,3 +1,4 @@
+import type { EvaluationLevel } from '../../schema/schemas/primitives/evaluator';
 import { getCredentialProvider } from './account';
 import {
   BedrockAgentCoreControlClient,
@@ -8,6 +9,7 @@ import {
   ListAgentRuntimesCommand,
   ListEvaluatorsCommand,
   ListMemoriesCommand,
+  ListOnlineEvaluationConfigsCommand,
   ListTagsForResourceCommand,
   UpdateOnlineEvaluationConfigCommand,
 } from '@aws-sdk/client-bedrock-agentcore-control';
@@ -22,6 +24,53 @@ export function createControlClient(region: string): BedrockAgentCoreControlClie
     region,
     credentials: getCredentialProvider(),
   });
+}
+
+/**
+ * Paginate through all pages of a list API and collect every item.
+ * Reuses a single client for connection pooling across pages.
+ */
+async function paginateAll<T>(
+  region: string,
+  fetchPage: (
+    options: { region: string; maxResults: number; nextToken?: string },
+    client: BedrockAgentCoreControlClient
+  ) => Promise<{ items: T[]; nextToken?: string }>
+): Promise<T[]> {
+  const client = createControlClient(region);
+  const items: T[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const result = await fetchPage({ region, maxResults: 100, nextToken }, client);
+    items.push(...result.items);
+    nextToken = result.nextToken;
+  } while (nextToken);
+
+  return items;
+}
+
+/**
+ * Fetch tags for a resource by ARN. Returns undefined when the ARN is missing,
+ * the resource has no tags, or the ListTagsForResource call fails.
+ */
+async function fetchTags(
+  client: BedrockAgentCoreControlClient,
+  resourceArn: string | undefined,
+  resourceLabel: string
+): Promise<Record<string, string> | undefined> {
+  if (!resourceArn) return undefined;
+  try {
+    const response = await client.send(new ListTagsForResourceCommand({ resourceArn }));
+    if (response.tags && Object.keys(response.tags).length > 0) {
+      return response.tags;
+    }
+  } catch (err) {
+    console.warn(
+      `Warning: Failed to fetch tags for ${resourceLabel}: ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+  return undefined;
 }
 
 export interface GetAgentRuntimeStatusOptions {
@@ -113,17 +162,10 @@ export async function listAgentRuntimes(
  * List all AgentCore Runtimes in the given region, paginating through all pages.
  */
 export async function listAllAgentRuntimes(options: { region: string }): Promise<AgentRuntimeSummary[]> {
-  const client = createControlClient(options.region);
-  const runtimes: AgentRuntimeSummary[] = [];
-  let nextToken: string | undefined;
-
-  do {
-    const result = await listAgentRuntimes({ region: options.region, maxResults: 100, nextToken }, client);
-    runtimes.push(...result.runtimes);
-    nextToken = result.nextToken;
-  } while (nextToken);
-
-  return runtimes;
+  return paginateAll(options.region, async (opts, client) => {
+    const result = await listAgentRuntimes(opts, client);
+    return { items: result.runtimes, nextToken: result.nextToken };
+  });
 }
 
 export interface GetAgentRuntimeOptions {
@@ -221,18 +263,7 @@ export async function getAgentRuntimeDetail(options: GetAgentRuntimeOptions): Pr
     }
   }
 
-  // Fetch tags via separate API call (same pattern as getMemoryDetail)
-  let tags: Record<string, string> | undefined;
-  if (response.agentRuntimeArn) {
-    try {
-      const tagsResponse = await client.send(new ListTagsForResourceCommand({ resourceArn: response.agentRuntimeArn }));
-      if (tagsResponse.tags && Object.keys(tagsResponse.tags).length > 0) {
-        tags = tagsResponse.tags;
-      }
-    } catch (err) {
-      console.warn(`Warning: Failed to fetch tags for runtime: ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }
+  const tags = await fetchTags(client, response.agentRuntimeArn, 'runtime');
 
   return {
     agentRuntimeId: response.agentRuntimeId ?? '',
@@ -311,17 +342,10 @@ export async function listMemories(
  * List all AgentCore Memories in the given region, paginating through all pages.
  */
 export async function listAllMemories(options: { region: string }): Promise<MemorySummary[]> {
-  const client = createControlClient(options.region);
-  const memories: MemorySummary[] = [];
-  let nextToken: string | undefined;
-
-  do {
-    const result = await listMemories({ region: options.region, maxResults: 100, nextToken }, client);
-    memories.push(...result.memories);
-    nextToken = result.nextToken;
-  } while (nextToken);
-
-  return memories;
+  return paginateAll(options.region, async (opts, client) => {
+    const result = await listMemories(opts, client);
+    return { items: result.memories, nextToken: result.nextToken };
+  });
 }
 
 export interface GetMemoryOptions {
@@ -378,16 +402,7 @@ export async function getMemoryDetail(options: GetMemoryOptions): Promise<Memory
     throw new Error(`Memory ${options.memoryId} is missing required field: eventExpiryDuration`);
   }
 
-  // Fetch tags via separate API call
-  let tags: Record<string, string> | undefined;
-  try {
-    const tagsResponse = await client.send(new ListTagsForResourceCommand({ resourceArn: memory.arn }));
-    if (tagsResponse.tags && Object.keys(tagsResponse.tags).length > 0) {
-      tags = tagsResponse.tags;
-    }
-  } catch (err) {
-    console.warn(`Warning: Failed to fetch tags for memory: ${err instanceof Error ? err.message : String(err)}`);
-  }
+  const tags = await fetchTags(client, memory.arn, 'memory');
 
   return {
     memoryId: memory.id,
@@ -424,13 +439,31 @@ export interface GetEvaluatorOptions {
   evaluatorId: string;
 }
 
+export interface GetEvaluatorLlmConfig {
+  model: string;
+  instructions: string;
+  ratingScale: {
+    numerical?: { value: number; label: string; definition: string }[];
+    categorical?: { label: string; definition: string }[];
+  };
+}
+
+export interface GetEvaluatorCodeBasedConfig {
+  lambdaArn: string;
+}
+
 export interface GetEvaluatorResult {
   evaluatorId: string;
   evaluatorArn: string;
   evaluatorName: string;
-  level: string;
+  level: EvaluationLevel;
   status: string;
   description?: string;
+  evaluatorConfig?: {
+    llmAsAJudge?: GetEvaluatorLlmConfig;
+    codeBased?: GetEvaluatorCodeBasedConfig;
+  };
+  tags?: Record<string, string>;
 }
 
 export async function getEvaluator(options: GetEvaluatorOptions): Promise<GetEvaluatorResult> {
@@ -440,19 +473,75 @@ export async function getEvaluator(options: GetEvaluatorOptions): Promise<GetEva
     evaluatorId: options.evaluatorId,
   });
 
-  const response = await client.send(command);
+  let response;
+  try {
+    response = await client.send(command);
+  } catch (err: unknown) {
+    const name = (err as { name?: string }).name ?? '';
+    if (name === 'ResourceNotFoundException' || name === 'ValidationException') {
+      throw new Error(`Evaluator "${options.evaluatorId}" not found. Verify the evaluator ID or ARN is correct.`);
+    }
+    throw err;
+  }
 
   if (!response.evaluatorId) {
     throw new Error(`No evaluator found for ID ${options.evaluatorId}`);
   }
 
+  // Map SDK evaluatorConfig union to flat optional-field format
+  let evaluatorConfig: GetEvaluatorResult['evaluatorConfig'];
+  if (response.evaluatorConfig) {
+    if ('llmAsAJudge' in response.evaluatorConfig && response.evaluatorConfig.llmAsAJudge) {
+      const llm = response.evaluatorConfig.llmAsAJudge;
+      // AWS API nests model ID under modelConfig.bedrockEvaluatorModelConfig.modelId;
+      // CLI schema flattens this to config.llmAsAJudge.model
+      let model = '';
+      if (
+        llm.modelConfig &&
+        'bedrockEvaluatorModelConfig' in llm.modelConfig &&
+        llm.modelConfig.bedrockEvaluatorModelConfig
+      ) {
+        model = llm.modelConfig.bedrockEvaluatorModelConfig.modelId ?? '';
+      }
+      const ratingScale: GetEvaluatorLlmConfig['ratingScale'] = {};
+      if (llm.ratingScale) {
+        if ('numerical' in llm.ratingScale && llm.ratingScale.numerical) {
+          ratingScale.numerical = llm.ratingScale.numerical.map(n => ({
+            value: n.value ?? 0,
+            label: n.label ?? '',
+            definition: n.definition ?? '',
+          }));
+        } else if ('categorical' in llm.ratingScale && llm.ratingScale.categorical) {
+          ratingScale.categorical = llm.ratingScale.categorical.map(c => ({
+            label: c.label ?? '',
+            definition: c.definition ?? '',
+          }));
+        }
+      }
+      evaluatorConfig = {
+        llmAsAJudge: { model, instructions: llm.instructions ?? '', ratingScale },
+      };
+    } else if ('codeBased' in response.evaluatorConfig && response.evaluatorConfig.codeBased) {
+      const cb = response.evaluatorConfig.codeBased;
+      if ('lambdaConfig' in cb && cb.lambdaConfig) {
+        evaluatorConfig = {
+          codeBased: { lambdaArn: cb.lambdaConfig.lambdaArn ?? '' },
+        };
+      }
+    }
+  }
+
+  const tags = await fetchTags(client, response.evaluatorArn, 'evaluator');
+
   return {
     evaluatorId: response.evaluatorId,
     evaluatorArn: response.evaluatorArn ?? '',
     evaluatorName: response.evaluatorName ?? '',
-    level: response.level ?? 'SESSION',
+    level: (response.level ?? 'SESSION') as EvaluationLevel,
     status: response.status ?? 'UNKNOWN',
     description: response.description,
+    evaluatorConfig,
+    tags,
   };
 }
 
@@ -477,15 +566,18 @@ export interface ListEvaluatorsResult {
   nextToken?: string;
 }
 
-export async function listEvaluators(options: ListEvaluatorsOptions): Promise<ListEvaluatorsResult> {
-  const client = createControlClient(options.region);
+export async function listEvaluators(
+  options: ListEvaluatorsOptions,
+  client?: BedrockAgentCoreControlClient
+): Promise<ListEvaluatorsResult> {
+  const resolvedClient = client ?? createControlClient(options.region);
 
   const command = new ListEvaluatorsCommand({
     maxResults: options.maxResults,
     nextToken: options.nextToken,
   });
 
-  const response = await client.send(command);
+  const response = await resolvedClient.send(command);
 
   return {
     evaluators: (response.evaluators ?? []).map(e => ({
@@ -501,8 +593,82 @@ export async function listEvaluators(options: ListEvaluatorsOptions): Promise<Li
   };
 }
 
+/**
+ * List all custom evaluators in the given region, paginating through all pages.
+ * Filters out Builtin evaluators — only custom evaluators can be imported.
+ */
+export async function listAllEvaluators(options: { region: string }): Promise<EvaluatorSummary[]> {
+  return paginateAll(options.region, async (opts, client) => {
+    const result = await listEvaluators(opts, client);
+    return {
+      items: result.evaluators.filter(e => !e.evaluatorName.startsWith('Builtin.')),
+      nextToken: result.nextToken,
+    };
+  });
+}
+
 // ============================================================================
-// Online Eval Config
+// Online Eval Config — List
+// ============================================================================
+
+export interface ListOnlineEvalConfigsOptions {
+  region: string;
+  maxResults?: number;
+  nextToken?: string;
+}
+
+export interface OnlineEvalConfigSummary {
+  onlineEvaluationConfigId: string;
+  onlineEvaluationConfigArn: string;
+  onlineEvaluationConfigName: string;
+  description?: string;
+  status: string;
+  executionStatus: string;
+}
+
+export interface ListOnlineEvalConfigsResult {
+  configs: OnlineEvalConfigSummary[];
+  nextToken?: string;
+}
+
+export async function listOnlineEvaluationConfigs(
+  options: ListOnlineEvalConfigsOptions,
+  client?: BedrockAgentCoreControlClient
+): Promise<ListOnlineEvalConfigsResult> {
+  const resolvedClient = client ?? createControlClient(options.region);
+
+  const command = new ListOnlineEvaluationConfigsCommand({
+    maxResults: options.maxResults,
+    nextToken: options.nextToken,
+  });
+
+  const response = await resolvedClient.send(command);
+
+  return {
+    configs: (response.onlineEvaluationConfigs ?? []).map(c => ({
+      onlineEvaluationConfigId: c.onlineEvaluationConfigId ?? '',
+      onlineEvaluationConfigArn: c.onlineEvaluationConfigArn ?? '',
+      onlineEvaluationConfigName: c.onlineEvaluationConfigName ?? '',
+      description: c.description,
+      status: c.status ?? 'UNKNOWN',
+      executionStatus: c.executionStatus ?? 'UNKNOWN',
+    })),
+    nextToken: response.nextToken,
+  };
+}
+
+/**
+ * List all online evaluation configs in the given region, paginating through all pages.
+ */
+export async function listAllOnlineEvaluationConfigs(options: { region: string }): Promise<OnlineEvalConfigSummary[]> {
+  return paginateAll(options.region, async (opts, client) => {
+    const result = await listOnlineEvaluationConfigs(opts, client);
+    return { items: result.configs, nextToken: result.nextToken };
+  });
+}
+
+// ============================================================================
+// Online Eval Config — Update / Get
 // ============================================================================
 
 export type OnlineEvalExecutionStatus = 'ENABLED' | 'DISABLED';
@@ -568,6 +734,12 @@ export interface GetOnlineEvalConfigResult {
   description?: string;
   failureReason?: string;
   outputLogGroupName?: string;
+  /** Sampling percentage from the rule config */
+  samplingPercentage?: number;
+  /** Service names from CloudWatch data source config (e.g. "projectName_agentName.DEFAULT") */
+  serviceNames?: string[];
+  /** Evaluator IDs referenced by this config */
+  evaluatorIds?: string[];
 }
 
 export async function getOnlineEvaluationConfig(
@@ -586,6 +758,14 @@ export async function getOnlineEvaluationConfig(
   }
 
   const logGroupName = response.outputConfig?.cloudWatchConfig?.logGroupName;
+  const samplingPercentage = response.rule?.samplingConfig?.samplingPercentage;
+  const serviceNames =
+    response.dataSourceConfig && 'cloudWatchLogs' in response.dataSourceConfig
+      ? response.dataSourceConfig.cloudWatchLogs?.serviceNames
+      : undefined;
+  const evaluatorIds = (response.evaluators ?? [])
+    .map(e => ('evaluatorId' in e ? e.evaluatorId : undefined))
+    .filter((id): id is string => !!id);
 
   return {
     configId: response.onlineEvaluationConfigId,
@@ -596,5 +776,8 @@ export async function getOnlineEvaluationConfig(
     description: response.description,
     failureReason: response.failureReason,
     outputLogGroupName: logGroupName,
+    samplingPercentage,
+    serviceNames,
+    evaluatorIds,
   };
 }

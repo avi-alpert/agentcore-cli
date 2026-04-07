@@ -1,4 +1,5 @@
 import type { ImportResourceResult, ImportResult } from '../../../commands/import/types';
+import { IMPORTABLE_RESOURCES } from '../../../commands/import/types';
 import { Panel } from '../../components/Panel';
 import { Screen } from '../../components/Screen';
 import { type Step, StepProgress } from '../../components/StepProgress';
@@ -40,11 +41,15 @@ export function ImportProgressScreen({
     started.current = true;
 
     const run = async () => {
-      if (importType === 'runtime' || importType === 'memory') {
+      if ((IMPORTABLE_RESOURCES as readonly string[]).includes(importType)) {
         const handler =
           importType === 'runtime'
             ? (await import('../../../commands/import/import-runtime')).handleImportRuntime
-            : (await import('../../../commands/import/import-memory')).handleImportMemory;
+            : importType === 'memory'
+              ? (await import('../../../commands/import/import-memory')).handleImportMemory
+              : importType === 'evaluator'
+                ? (await import('../../../commands/import/import-evaluator')).handleImportEvaluator
+                : (await import('../../../commands/import/import-online-eval')).handleImportOnlineEval;
 
         const result = await handler({ arn, code, onProgress });
         if (result.success) {
