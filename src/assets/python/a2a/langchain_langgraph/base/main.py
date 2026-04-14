@@ -1,5 +1,6 @@
 from langchain_core.tools import tool
 from langgraph.prebuilt import create_react_agent
+from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from a2a.server.agent_execution import AgentExecutor, RequestContext
 from a2a.server.events import EventQueue
 from a2a.server.tasks import TaskUpdater
@@ -7,6 +8,8 @@ from a2a.types import AgentCapabilities, AgentCard, AgentSkill, Part, TextPart
 from a2a.utils import new_task
 from bedrock_agentcore.runtime import serve_a2a
 from model.load import load_model
+
+LangchainInstrumentor().instrument()
 
 
 @tool
