@@ -2,6 +2,7 @@ import os
 from langchain_core.messages import HumanMessage
 from langgraph.prebuilt import create_react_agent
 from langchain.tools import tool
+from opentelemetry.instrumentation.langchain import LangchainInstrumentor
 from bedrock_agentcore.runtime import BedrockAgentCoreApp
 from model.load import load_model
 {{#if hasGateway}}
@@ -9,6 +10,8 @@ from mcp_client.client import get_all_gateway_mcp_client
 {{else}}
 from mcp_client.client import get_streamable_http_mcp_client
 {{/if}}
+
+LangchainInstrumentor().instrument()
 
 app = BedrockAgentCoreApp()
 log = app.logger
