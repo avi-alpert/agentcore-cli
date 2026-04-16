@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /**
  * GET /api/traces?agentName=xxx — list recent traces.
- * In dev mode this returns local OTEL traces; in invoke mode it returns CloudWatch traces.
+ * Returns local OTEL traces when the collector is active.
  */
 export async function handleListTraces(
   ctx: RouteContext,
@@ -58,7 +58,7 @@ export async function handleListTraces(
 
 /**
  * GET /api/traces/:traceId?agentName=xxx — get full trace data.
- * In dev mode this returns local OTEL traces; in invoke mode it returns CloudWatch traces.
+ * Returns local OTEL trace spans and logs when the collector is active.
  */
 export async function handleGetTrace(
   ctx: RouteContext,

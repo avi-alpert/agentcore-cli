@@ -8,7 +8,6 @@ let a2aRequestId = 1;
 /**
  * POST /invocations — proxy to the selected agent.
  * Body must include agentName to route to the correct running agent.
- * When onInvoke is provided, delegates entirely to the custom handler (e.g. for deployed agent invocation).
  */
 export async function handleInvocations(
   ctx: RouteContext,
@@ -18,14 +17,6 @@ export async function handleInvocations(
 ): Promise<void> {
   const body = await ctx.readBody(req);
 
-  // Delegate to custom invocation handler if provided (e.g. invoke mode — calls deployed runtime)
-  if (ctx.options.onInvoke) {
-    const setCors = () => ctx.setCorsHeaders(res, origin);
-    await ctx.options.onInvoke(body, res, setCors);
-    return;
-  }
-
-  // Default dev mode: proxy to local agent server
   let agentPort: number | undefined;
   let agentName: string | undefined;
   let agentProtocol: string | undefined;

@@ -7,14 +7,14 @@ import { spawn } from 'child_process';
 export interface RunWebUIOptions {
   /** Options to pass to WebUIServer (minus uiPort, which is resolved automatically) */
   serverOptions: Omit<WebUIOptions, 'uiPort' | 'onReady' | 'onLog'>;
-  /** Logger command label (e.g. 'dev' or 'invoke') */
+  /** Logger command label (e.g. 'dev') */
   logLabel: string;
   /** Optional log handler override. Defaults to console logging errors. */
   onLog?: (level: 'info' | 'warn' | 'error', message: string) => void;
 }
 
 /**
- * Shared entry point for launching the web UI in both dev and invoke modes.
+ * Shared entry point for launching the web UI.
  * Handles port discovery, logger setup, browser launch, SIGINT, and keep-alive.
  */
 export async function runWebUI(opts: RunWebUIOptions): Promise<void> {

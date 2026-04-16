@@ -7,16 +7,8 @@ export function handleStatus(ctx: RouteContext, res: ServerResponse, origin?: st
   const { agents } = ctx.options;
   const running: StatusRunningAgent[] = [];
 
-  if (ctx.options.onInvoke) {
-    // Invoke mode: all agents are always "running" (deployed remotely)
-    for (const agent of agents) {
-      running.push({ name: agent.name, port: 0 });
-    }
-  } else {
-    // Dev mode: only locally started agents are running
-    for (const [name, { port }] of ctx.runningAgents) {
-      running.push({ name, port });
-    }
+  for (const [name, { port }] of ctx.runningAgents) {
+    running.push({ name, port });
   }
 
   // Collect per-agent errors

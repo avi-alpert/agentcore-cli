@@ -57,13 +57,6 @@ export type StartHandler = (
 ) => Promise<{ success: boolean; name: string; port: number; error?: string }>;
 
 /**
- * Custom handler for POST /invocations.
- * Receives the parsed request body and the raw ServerResponse so it can stream.
- * Must write headers and end the response itself.
- */
-export type InvocationHandler = (body: string, res: ServerResponse, setCors: () => void) => Promise<void>;
-
-/**
  * Custom handler for GET /api/traces.
  * Returns a list of recent traces for the given agent.
  */
@@ -106,8 +99,8 @@ export type RetrieveMemoryRecordsHandler = (
 ) => Promise<{ success: boolean; records?: unknown[]; error?: string }>;
 
 export interface WebUIOptions {
-  /** Whether this server is running in dev or invoke mode */
-  mode: 'dev' | 'invoke';
+  /** Server mode identifier (currently only 'dev' is used) */
+  mode: 'dev';
   /** Port for the web UI server (API proxy) */
   uiPort: number;
   /** Available agents (metadata only — servers are started on demand) */
@@ -126,15 +119,13 @@ export interface WebUIOptions {
   onLog?: (level: 'info' | 'warn' | 'error', message: string) => void;
   /** Custom start handler — overrides the default dev server start logic */
   onStart?: StartHandler;
-  /** Custom invocation handler — overrides the default local proxy logic */
-  onInvoke?: InvocationHandler;
-  /** Custom handler for listing traces (local OTEL in dev mode, CloudWatch in invoke mode) */
+  /** Custom handler for listing traces */
   onListTraces?: ListTracesHandler;
-  /** Custom handler for getting a single trace (local OTEL in dev mode, CloudWatch in invoke mode) */
+  /** Custom handler for getting a single trace */
   onGetTrace?: GetTraceHandler;
-  /** Custom handler for listing memory records — only available in invoke mode */
+  /** Custom handler for listing memory records */
   onListMemoryRecords?: ListMemoryRecordsHandler;
-  /** Custom handler for searching memory records — only available in invoke mode */
+  /** Custom handler for searching memory records */
   onRetrieveMemoryRecords?: RetrieveMemoryRecordsHandler;
   /** Agent to pre-select in the UI dropdown (set when --runtime is specified) */
   selectedAgent?: string;

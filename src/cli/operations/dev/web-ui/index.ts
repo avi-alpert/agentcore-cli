@@ -2,7 +2,6 @@ export {
   WebUIServer,
   type WebUIOptions,
   type StartHandler,
-  type InvocationHandler,
   type ListTracesHandler,
   type GetTraceHandler,
   type ListMemoryRecordsHandler,

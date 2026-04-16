@@ -29,7 +29,7 @@ export async function handleStart(
     return;
   }
 
-  // Delegate to custom start handler if provided (e.g. invoke mode — agents are already deployed)
+  // Delegate to custom start handler if provided
   if (ctx.options.onStart) {
     const result = await ctx.options.onStart(agentName);
     ctx.setCorsHeaders(res, origin);

@@ -32,7 +32,7 @@ export interface StatusAgent {
 /** Running agent entry in the status response */
 export interface StatusRunningAgent {
   name: string;
-  /** Port the agent is listening on. 0 in invoke mode (agents are remote). */
+  /** Port the agent is listening on. */
   port: number;
 }
 

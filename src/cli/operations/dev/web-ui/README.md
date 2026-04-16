@@ -91,8 +91,6 @@ agent name and error message:
 
 Errors are cleared when the agent is successfully started again via `POST /api/start`.
 
-In invoke mode, all agents appear in `running` with `port: 0` (they're deployed remotely) and `errors` is always empty.
-
 The agent list is kept in sync with `agentcore.json` via `fs.watch` — if you add or remove an agent in another terminal,
 the status endpoint reflects the change without restarting the dev server.
 
@@ -171,8 +169,7 @@ Error:
 ### `POST /invocations`
 
 Proxies a chat invocation to the selected running agent. The `agentName` field routes to the correct agent; falls back
-to the first running agent if omitted. In invoke mode, delegates to the custom invocation handler (calls deployed
-runtime).
+to the first running agent if omitted.
 
 Request:
 
@@ -182,7 +179,7 @@ Request:
 
 ### `GET /api/traces?agentName=xxx[&startTime=ms&endTime=ms]`
 
-Lists recent traces for a deployed agent. Only available in invoke mode.
+Lists recent traces for an agent. Available when the OTEL collector is active.
 
 Query parameters:
 
@@ -198,7 +195,7 @@ Response:
 
 ### `GET /api/traces/:traceId?agentName=xxx[&startTime=ms&endTime=ms]`
 
-Returns full trace data (spans) for a specific trace. Only available in invoke mode.
+Returns full trace data (spans) for a specific trace. Available when the OTEL collector is active.
 
 Query parameters:
 
@@ -214,7 +211,7 @@ Response:
 
 ### `GET /api/memory?memoryName=xxx&namespace=yyy[&strategyId=zzz]`
 
-Lists memory records for a given memory and namespace. Only available in invoke mode.
+Lists memory records for a given memory and namespace. Requires a deployed memory with `onListMemoryRecords` handler.
 
 Response:
 
@@ -224,7 +221,7 @@ Response:
 
 ### `POST /api/memory/search`
 
-Performs semantic search across memory records. Only available in invoke mode.
+Performs semantic search across memory records. Requires a deployed memory with `onRetrieveMemoryRecords` handler.
 
 Request:
 

@@ -4,7 +4,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 /**
  * GET /api/memory?memoryName=xxx&namespace=yyy[&strategyId=zzz]
- * Lists memory records. Requires onListMemoryRecords handler (invoke mode only).
+ * Lists memory records. Requires onListMemoryRecords handler.
  */
 export async function handleListMemoryRecords(
   ctx: RouteContext,
@@ -15,7 +15,7 @@ export async function handleListMemoryRecords(
   if (!ctx.options.onListMemoryRecords) {
     ctx.setCorsHeaders(res, origin);
     res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'Memory browsing is only available in invoke mode' }));
+    res.end(JSON.stringify({ success: false, error: 'Memory browsing is not available' }));
     return;
   }
 
@@ -54,7 +54,7 @@ export async function handleListMemoryRecords(
 /**
  * POST /api/memory/search — semantic search across memory records.
  * Body: { memoryName, namespace, searchQuery, strategyId? }
- * Requires onRetrieveMemoryRecords handler (invoke mode only).
+ * Requires onRetrieveMemoryRecords handler.
  */
 export async function handleRetrieveMemoryRecords(
   ctx: RouteContext,
@@ -65,7 +65,7 @@ export async function handleRetrieveMemoryRecords(
   if (!ctx.options.onRetrieveMemoryRecords) {
     ctx.setCorsHeaders(res, origin);
     res.writeHead(404, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'Memory search is only available in invoke mode' }));
+    res.end(JSON.stringify({ success: false, error: 'Memory search is not available' }));
     return;
   }
 
