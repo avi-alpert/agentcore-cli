@@ -35,12 +35,12 @@ const CSP_HEADER =
 function resolveUIDistDir(): string | null {
   const thisDir = path.dirname(fileURLToPath(import.meta.url));
   const candidates = [
-    // Bundled CLI: dist/cli/index.mjs → dist/agent-dev-tools/
-    path.resolve(thisDir, '..', 'agent-dev-tools'),
+    // Bundled CLI: dist/cli/index.mjs → dist/agent-inspector/
+    path.resolve(thisDir, '..', 'agent-inspector'),
     // npm package: @aws/agent-inspector/dist-assets/
     path.resolve(thisDir, '..', '..', '..', '..', '..', 'node_modules', '@aws', 'agent-inspector', 'dist-assets'),
-    // Dev via tsx: src/cli/operations/dev/web-ui/ → src/assets/agent-dev-tools/
-    path.resolve(thisDir, '..', '..', '..', '..', 'assets', 'agent-dev-tools'),
+    // Dev via tsx: src/cli/operations/dev/web-ui/ → src/assets/agent-inspector/
+    path.resolve(thisDir, '..', '..', '..', '..', 'assets', 'agent-inspector'),
   ];
   for (const dir of candidates) {
     if (fs.existsSync(path.join(dir, 'index.html'))) return dir;
@@ -145,7 +145,7 @@ export interface WebUIOptions {
 /**
  * Lightweight HTTP server that proxies requests to agent dev servers.
  * Agent servers are started on demand when the frontend selects an agent.
- * The chat UI is served as static files from the built frontend (src/agent-dev-tools).
+ * The chat UI is served as static files from the built frontend (agent-inspector).
  *
  * Route handlers are in ./handlers/ — this class owns lifecycle, CORS, and routing only.
  */

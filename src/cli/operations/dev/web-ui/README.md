@@ -8,7 +8,7 @@ Browser mode (`agentcore dev`) launches a local proxy server that serves both th
 Browser → http://127.0.0.1:8081
         |
   Node.js Server  (port: findAvailablePort(8081))
-   ├─ Serves frontend (static files from built agent-dev-tools)
+   ├─ Serves frontend (static files from built agent-inspector)
    └─ API endpoints (/api/status, /invocations, etc.)
         |
         | HTTP (deterministic port: proxyPort + 1 + agentIndex)
@@ -36,9 +36,9 @@ Ports are deterministic relative to the proxy port, so no scanning is needed for
 
 ## Frontend
 
-The chat UI lives in `src/agent-dev-tools/` as a self-contained React package. At build time, it produces static files
-(index.html, index.js, index.css) that are copied to `dist/agent-dev-tools/`. The Node.js server serves these files for
-any non-API GET request, with SPA fallback to `index.html`.
+The chat UI lives in the `@aws/agent-inspector` package. At build time, it produces static files (index.html, index.js,
+index.css) that are copied to `dist/agent-inspector/`. The Node.js server serves these files for any non-API GET
+request, with SPA fallback to `index.html`.
 
 ### Frontend Development (Hot Reload)
 
