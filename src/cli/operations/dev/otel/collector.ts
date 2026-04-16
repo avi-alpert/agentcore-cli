@@ -59,7 +59,7 @@ export class OtelCollector {
     });
 
     return new Promise<number>((resolve, reject) => {
-      this.server!.listen(this.port, '0.0.0.0', () => {
+      this.server!.listen(this.port, '127.0.0.1', () => {
         this.onLog?.('info', `OTEL collector listening on port ${this.port}`);
         if (this.persistDir) {
           this.onLog?.('info', `OTEL trace persistence enabled → ${this.persistDir}`);
