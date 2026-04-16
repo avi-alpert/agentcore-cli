@@ -354,7 +354,7 @@ describe('ContainerDevServer', () => {
       await server.start();
 
       const spawnArgs = getSpawnArgs();
-      expect(spawnArgs).toContain('OTEL_EXPORTER_OTLP_ENDPOINT=http://127.0.0.1:4318');
+      expect(spawnArgs).toContain('OTEL_EXPORTER_OTLP_ENDPOINT=http://host.docker.internal:4318');
       expect(spawnArgs).toContain('OTEL_EXPORTER_OTLP_PROTOCOL=http/json');
     });
 
