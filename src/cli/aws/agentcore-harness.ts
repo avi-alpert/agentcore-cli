@@ -1,0 +1,537 @@
+/**
+ * Typed client wrappers for Harness control plane and data plane operations.
+ *
+ * Control plane: CreateHarness, GetHarness, UpdateHarness, DeleteHarness, ListHarnesses
+ * Data plane: InvokeHarness (streaming)
+ * TODO InvokeAgentRuntimeCommand
+ *
+ * Built on AgentCoreApiClient (shared SigV4 HTTP client).
+ * Migrate to @aws-sdk/client-bedrock-agentcore-control when Harness commands land in the SDK.
+ */
+import { AgentCoreApiClient, AgentCoreApiError } from './api-client';
+import { randomUUID } from 'node:crypto';
+
+// ============================================================================
+// Shared Types (from Smithy service model)
+// ============================================================================
+
+export type HarnessStatus = 'CREATING' | 'READY' | 'UPDATING' | 'DELETING' | 'DELETED' | 'FAILED';
+
+export interface HarnessModelConfiguration {
+  bedrockModelConfig?: { modelId: string };
+  anthropicModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
+  openAIModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
+  geminiModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
+}
+
+export type HarnessSystemPrompt = { text: string }[];
+
+export interface HarnessTool {
+  type: string;
+  name: string;
+  browserArn?: string;
+  codeInterpreterArn?: string;
+  config?: Record<string, unknown>;
+}
+
+export interface HarnessSkill {
+  path: string;
+}
+
+export interface HarnessMemoryConfiguration {
+  memoryArn?: string;
+}
+
+export interface HarnessTruncationConfiguration {
+  strategy: string;
+  config: { slidingWindow?: { messagesCount: number } };
+}
+
+export interface HarnessEnvironmentArtifact {
+  containerConfiguration?: { containerUri: string };
+}
+
+export interface HarnessAgentCoreRuntimeEnvironment {
+  lifecycleConfiguration?: Record<string, unknown>;
+  networkConfiguration?: Record<string, unknown>;
+  filesystemConfigurations?: Record<string, unknown>[];
+}
+
+export interface HarnessEnvironmentProvider {
+  agentCoreRuntimeEnvironment?: HarnessAgentCoreRuntimeEnvironment;
+}
+
+export interface Harness {
+  harnessId: string;
+  harnessName: string;
+  arn: string;
+  status: HarnessStatus;
+  executionRoleArn: string;
+  model?: HarnessModelConfiguration;
+  systemPrompt?: HarnessSystemPrompt;
+  tools?: HarnessTool[];
+  skills?: HarnessSkill[];
+  allowedTools?: string[];
+  memory?: HarnessMemoryConfiguration;
+  truncation?: HarnessTruncationConfiguration;
+  maxIterations?: number;
+  maxTokens?: number;
+  timeoutSeconds?: number;
+  environment?: HarnessEnvironmentProvider;
+  environmentArtifact?: HarnessEnvironmentArtifact;
+  environmentVariables?: Record<string, string>;
+  authorizerConfiguration?: Record<string, unknown>;
+  tags?: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface HarnessSummary {
+  harnessId: string;
+  harnessName: string;
+  arn: string;
+  status: HarnessStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================================
+// CreateHarness
+// ============================================================================
+
+export interface CreateHarnessOptions {
+  region: string;
+  harnessName: string;
+  executionRoleArn: string;
+  environment?: HarnessEnvironmentProvider;
+  environmentArtifact?: HarnessEnvironmentArtifact;
+  environmentVariables?: Record<string, string>;
+  authorizerConfiguration?: Record<string, unknown>;
+  model?: HarnessModelConfiguration;
+  systemPrompt?: HarnessSystemPrompt;
+  tools?: HarnessTool[];
+  skills?: HarnessSkill[];
+  allowedTools?: string[];
+  memory?: HarnessMemoryConfiguration;
+  truncation?: HarnessTruncationConfiguration;
+  maxIterations?: number;
+  maxTokens?: number;
+  timeoutSeconds?: number;
+  tags?: Record<string, string>;
+}
+
+export interface CreateHarnessResult {
+  harness: Harness;
+}
+
+export async function createHarness(options: CreateHarnessOptions): Promise<CreateHarnessResult> {
+  const { region, ...rest } = options;
+  const client = new AgentCoreApiClient({ region, plane: 'control' });
+
+  const body: Record<string, unknown> = {
+    harnessName: rest.harnessName,
+    clientToken: randomUUID(),
+    executionRoleArn: rest.executionRoleArn,
+  };
+
+  if (rest.environment) body.environment = rest.environment;
+  if (rest.environmentArtifact) body.environmentArtifact = rest.environmentArtifact;
+  if (rest.environmentVariables) body.environmentVariables = rest.environmentVariables;
+  if (rest.authorizerConfiguration) body.authorizerConfiguration = rest.authorizerConfiguration;
+  if (rest.model) body.model = rest.model;
+  if (rest.systemPrompt) body.systemPrompt = rest.systemPrompt;
+  if (rest.tools) body.tools = rest.tools;
+  if (rest.skills) body.skills = rest.skills;
+  if (rest.allowedTools) body.allowedTools = rest.allowedTools;
+  if (rest.memory) body.memory = rest.memory;
+  if (rest.truncation) body.truncation = rest.truncation;
+  if (rest.maxIterations != null) body.maxIterations = rest.maxIterations;
+  if (rest.maxTokens != null) body.maxTokens = rest.maxTokens;
+  if (rest.timeoutSeconds != null) body.timeoutSeconds = rest.timeoutSeconds;
+  if (rest.tags) body.tags = rest.tags;
+
+  const result = await client.request({ method: 'POST', path: '/harnesses', body });
+  return result as CreateHarnessResult;
+}
+
+// ============================================================================
+// GetHarness
+// ============================================================================
+
+export interface GetHarnessOptions {
+  region: string;
+  harnessId: string;
+}
+
+export interface GetHarnessResult {
+  harness: Harness;
+}
+
+export async function getHarness(options: GetHarnessOptions): Promise<GetHarnessResult> {
+  const client = new AgentCoreApiClient({ region: options.region, plane: 'control' });
+  const result = await client.request({ method: 'GET', path: `/harnesses/${options.harnessId}` });
+  return result as GetHarnessResult;
+}
+
+// ============================================================================
+// UpdateHarness
+// ============================================================================
+
+export interface UpdateHarnessOptions {
+  region: string;
+  harnessId: string;
+  executionRoleArn?: string;
+  environment?: HarnessEnvironmentProvider;
+  environmentArtifact?: { optionalValue: HarnessEnvironmentArtifact | null };
+  environmentVariables?: Record<string, string>;
+  authorizerConfiguration?: { optionalValue: Record<string, unknown> | null };
+  model?: HarnessModelConfiguration;
+  systemPrompt?: HarnessSystemPrompt;
+  tools?: HarnessTool[];
+  skills?: HarnessSkill[];
+  allowedTools?: string[];
+  memory?: { optionalValue: HarnessMemoryConfiguration | null };
+  truncation?: HarnessTruncationConfiguration;
+  maxIterations?: number;
+  maxTokens?: number;
+  timeoutSeconds?: number;
+  tags?: Record<string, string>;
+}
+
+export interface UpdateHarnessResult {
+  harness: Harness;
+}
+
+export async function updateHarness(options: UpdateHarnessOptions): Promise<UpdateHarnessResult> {
+  const { region, harnessId, ...rest } = options;
+  const client = new AgentCoreApiClient({ region, plane: 'control' });
+
+  const body: Record<string, unknown> = {
+    clientToken: randomUUID(),
+  };
+
+  if (rest.executionRoleArn) body.executionRoleArn = rest.executionRoleArn;
+  if (rest.environment) body.environment = rest.environment;
+  if (rest.environmentArtifact !== undefined) body.environmentArtifact = rest.environmentArtifact;
+  if (rest.environmentVariables) body.environmentVariables = rest.environmentVariables;
+  if (rest.authorizerConfiguration !== undefined) body.authorizerConfiguration = rest.authorizerConfiguration;
+  if (rest.model) body.model = rest.model;
+  if (rest.systemPrompt) body.systemPrompt = rest.systemPrompt;
+  if (rest.tools) body.tools = rest.tools;
+  if (rest.skills) body.skills = rest.skills;
+  if (rest.allowedTools) body.allowedTools = rest.allowedTools;
+  if (rest.memory !== undefined) body.memory = rest.memory;
+  if (rest.truncation) body.truncation = rest.truncation;
+  if (rest.maxIterations != null) body.maxIterations = rest.maxIterations;
+  if (rest.maxTokens != null) body.maxTokens = rest.maxTokens;
+  if (rest.timeoutSeconds != null) body.timeoutSeconds = rest.timeoutSeconds;
+  if (rest.tags) body.tags = rest.tags;
+
+  const result = await client.request({ method: 'PATCH', path: `/harnesses/${harnessId}`, body });
+  return result as UpdateHarnessResult;
+}
+
+// ============================================================================
+// DeleteHarness
+// ============================================================================
+
+export interface DeleteHarnessOptions {
+  region: string;
+  harnessId: string;
+}
+
+export interface DeleteHarnessResult {
+  harness: Harness;
+}
+
+export async function deleteHarness(options: DeleteHarnessOptions): Promise<DeleteHarnessResult> {
+  const client = new AgentCoreApiClient({ region: options.region, plane: 'control' });
+  const result = await client.request({
+    method: 'DELETE',
+    path: `/harnesses/${options.harnessId}`,
+    query: { clientToken: randomUUID() },
+  });
+  return result as DeleteHarnessResult;
+}
+
+// ============================================================================
+// ListHarnesses
+// ============================================================================
+
+export interface ListHarnessesOptions {
+  region: string;
+  maxResults?: number;
+  nextToken?: string;
+}
+
+export interface ListHarnessesResult {
+  harnesses: HarnessSummary[];
+  nextToken?: string;
+}
+
+export async function listHarnesses(options: ListHarnessesOptions): Promise<ListHarnessesResult> {
+  const client = new AgentCoreApiClient({ region: options.region, plane: 'control' });
+  const query: Record<string, string> = {};
+  if (options.maxResults != null) query.maxResults = String(options.maxResults);
+  if (options.nextToken) query.nextToken = options.nextToken;
+
+  const result = await client.request({ method: 'GET', path: '/harnesses', query });
+  return result as ListHarnessesResult;
+}
+
+export async function listAllHarnesses(region: string): Promise<HarnessSummary[]> {
+  const all: HarnessSummary[] = [];
+  let nextToken: string | undefined;
+
+  do {
+    const result = await listHarnesses({ region, maxResults: 100, nextToken });
+    all.push(...result.harnesses);
+    nextToken = result.nextToken;
+  } while (nextToken);
+
+  return all;
+}
+
+// ============================================================================
+// InvokeHarness (streaming, data plane)
+// ============================================================================
+
+export interface InvokeHarnessOptions {
+  region: string;
+  harnessArn: string;
+  runtimeSessionId: string;
+  messages: { role: string; content: Record<string, unknown>[] }[];
+  model?: HarnessModelConfiguration;
+  systemPrompt?: HarnessSystemPrompt;
+  tools?: HarnessTool[];
+  skills?: HarnessSkill[];
+  allowedTools?: string[];
+  maxIterations?: number;
+  maxTokens?: number;
+  timeoutSeconds?: number;
+  actorId?: string;
+}
+
+// ── Stream event types ──────────────────────────────────────────────────────
+
+export type HarnessStopReason =
+  | 'end_turn'
+  | 'tool_use'
+  | 'tool_result'
+  | 'max_tokens'
+  | 'stop_sequence'
+  | 'content_filtered'
+  | 'malformed_model_output'
+  | 'malformed_tool_use'
+  | 'interrupted'
+  | 'partial_turn'
+  | 'model_context_window_exceeded'
+  | 'max_iterations_exceeded'
+  | 'max_output_tokens_exceeded'
+  | 'timeout_exceeded';
+
+export interface ToolUseBlockStart {
+  toolUseId: string;
+  name: string;
+  type?: string;
+  serverName?: string;
+}
+
+export interface ToolResultBlockStart {
+  toolUseId: string;
+  status?: string;
+}
+
+export type ContentBlockStart =
+  | { type: 'toolUse'; toolUse: ToolUseBlockStart }
+  | { type: 'toolResult'; toolResult: ToolResultBlockStart };
+
+export type ContentBlockDelta =
+  | { type: 'text'; text: string }
+  | { type: 'toolUse'; input: string }
+  | { type: 'toolResult'; results: Record<string, unknown>[] }
+  | { type: 'reasoningContent'; text?: string; signature?: string };
+
+export interface TokenUsage {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
+  cacheReadInputTokens?: number;
+  cacheWriteInputTokens?: number;
+}
+
+export interface StreamMetrics {
+  latencyMs: number;
+}
+
+export type HarnessStreamEvent =
+  | { type: 'messageStart'; role: string }
+  | { type: 'contentBlockStart'; contentBlockIndex: number; start: ContentBlockStart }
+  | { type: 'contentBlockDelta'; contentBlockIndex: number; delta: ContentBlockDelta }
+  | { type: 'contentBlockStop'; contentBlockIndex: number }
+  | { type: 'messageStop'; stopReason: HarnessStopReason }
+  | { type: 'metadata'; usage: TokenUsage; metrics: StreamMetrics }
+  | { type: 'error'; errorType: string; message: string };
+
+export async function* invokeHarness(options: InvokeHarnessOptions): AsyncGenerator<HarnessStreamEvent> {
+  const { region, harnessArn, runtimeSessionId, messages, ...overrides } = options;
+  const client = new AgentCoreApiClient({ region, plane: 'data' });
+
+  const body: Record<string, unknown> = { messages };
+  if (overrides.model) body.model = overrides.model;
+  if (overrides.systemPrompt) body.systemPrompt = overrides.systemPrompt;
+  if (overrides.tools) body.tools = overrides.tools;
+  if (overrides.skills) body.skills = overrides.skills;
+  if (overrides.allowedTools) body.allowedTools = overrides.allowedTools;
+  if (overrides.maxIterations != null) body.maxIterations = overrides.maxIterations;
+  if (overrides.maxTokens != null) body.maxTokens = overrides.maxTokens;
+  if (overrides.timeoutSeconds != null) body.timeoutSeconds = overrides.timeoutSeconds;
+  if (overrides.actorId) body.actorId = overrides.actorId;
+
+  const response = await client.requestRaw({
+    method: 'POST',
+    path: '/harnesses/invoke',
+    query: { harnessArn },
+    headers: { 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': runtimeSessionId },
+    body,
+  });
+
+  if (!response.ok) {
+    const errorBody = await response.text();
+    const requestId = response.headers.get('x-amzn-requestid') ?? undefined;
+    throw new AgentCoreApiError(response.status, errorBody, requestId);
+  }
+
+  if (!response.body) return;
+
+  yield* parseEventStream(response.body);
+}
+
+async function* parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<HarnessStreamEvent> {
+  const reader = body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+
+      for (const line of lines) {
+        const event = parseLine(line);
+        if (event) yield event;
+      }
+    }
+
+    if (buffer.trim()) {
+      const event = parseLine(buffer);
+      if (event) yield event;
+    }
+  } finally {
+    reader.releaseLock();
+  }
+}
+
+function parseLine(line: string): HarnessStreamEvent | null {
+  const trimmed = line.trim();
+  if (!trimmed || trimmed.startsWith(':')) return null;
+
+  let payload: Record<string, unknown>;
+  const dataPrefix = 'data: ';
+  const raw = trimmed.startsWith(dataPrefix) ? trimmed.slice(dataPrefix.length) : trimmed;
+
+  try {
+    payload = JSON.parse(raw) as Record<string, unknown>;
+  } catch {
+    return null;
+  }
+
+  if ('messageStart' in payload) {
+    const ms = payload.messageStart as { role: string };
+    return { type: 'messageStart', role: ms.role };
+  }
+
+  if ('contentBlockStart' in payload) {
+    const cbs = payload.contentBlockStart as { contentBlockIndex: number; start: Record<string, unknown> };
+    return {
+      type: 'contentBlockStart',
+      contentBlockIndex: cbs.contentBlockIndex,
+      start: parseContentBlockStart(cbs.start),
+    };
+  }
+
+  if ('contentBlockDelta' in payload) {
+    const cbd = payload.contentBlockDelta as { contentBlockIndex: number; delta: Record<string, unknown> };
+    return {
+      type: 'contentBlockDelta',
+      contentBlockIndex: cbd.contentBlockIndex,
+      delta: parseContentBlockDelta(cbd.delta),
+    };
+  }
+
+  if ('contentBlockStop' in payload) {
+    const stop = payload.contentBlockStop as { contentBlockIndex: number };
+    return { type: 'contentBlockStop', contentBlockIndex: stop.contentBlockIndex };
+  }
+
+  if ('messageStop' in payload) {
+    const ms = payload.messageStop as { stopReason: HarnessStopReason };
+    return { type: 'messageStop', stopReason: ms.stopReason };
+  }
+
+  if ('metadata' in payload) {
+    const md = payload.metadata as { usage: TokenUsage; metrics: StreamMetrics };
+    return { type: 'metadata', usage: md.usage, metrics: md.metrics };
+  }
+
+  if ('internalServerException' in payload) {
+    const ex = payload.internalServerException as { message?: string };
+    return { type: 'error', errorType: 'internalServerException', message: ex.message ?? 'Internal server error' };
+  }
+
+  if ('validationException' in payload) {
+    const ex = payload.validationException as { message?: string };
+    return { type: 'error', errorType: 'validationException', message: ex.message ?? 'Validation error' };
+  }
+
+  if ('runtimeClientError' in payload) {
+    const ex = payload.runtimeClientError as { message?: string };
+    return { type: 'error', errorType: 'runtimeClientError', message: ex.message ?? 'Runtime client error' };
+  }
+
+  return null;
+}
+
+function parseContentBlockStart(start: Record<string, unknown>): ContentBlockStart {
+  if ('toolUse' in start) {
+    const tu = start.toolUse as ToolUseBlockStart;
+    return { type: 'toolUse', toolUse: tu };
+  }
+  if ('toolResult' in start) {
+    const tr = start.toolResult as ToolResultBlockStart;
+    return { type: 'toolResult', toolResult: tr };
+  }
+  return { type: 'toolUse', toolUse: { toolUseId: '', name: 'unknown' } };
+}
+
+function parseContentBlockDelta(delta: Record<string, unknown>): ContentBlockDelta {
+  if ('text' in delta) {
+    return { type: 'text', text: delta.text as string };
+  }
+  if ('toolUse' in delta) {
+    const tu = delta.toolUse as { input: string };
+    return { type: 'toolUse', input: tu.input };
+  }
+  if ('toolResult' in delta) {
+    return { type: 'toolResult', results: delta.toolResult as Record<string, unknown>[] };
+  }
+  if ('reasoningContent' in delta) {
+    const rc = delta.reasoningContent as { text?: string; signature?: string };
+    return { type: 'reasoningContent', text: rc.text, signature: rc.signature };
+  }
+  return { type: 'text', text: '' };
+}
