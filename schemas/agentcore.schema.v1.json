@@ -1785,6 +1785,7 @@
       }
     },
     "harnesses": {
+      "default": [],
       "type": "array",
       "items": {
         "type": "object",
