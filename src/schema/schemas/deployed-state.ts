@@ -134,6 +134,20 @@ export const PolicyDeployedStateSchema = z.object({
 export type PolicyDeployedState = z.infer<typeof PolicyDeployedStateSchema>;
 
 // ============================================================================
+// Harness Deployed State
+// ============================================================================
+
+export const HarnessDeployedStateSchema = z.object({
+  harnessId: z.string().min(1),
+  harnessArn: z.string().min(1),
+  roleArn: z.string().min(1),
+  status: z.string().min(1),
+  memoryArn: z.string().optional(),
+});
+
+export type HarnessDeployedState = z.infer<typeof HarnessDeployedStateSchema>;
+
+// ============================================================================
 // Credential Deployed State
 // ============================================================================
 
@@ -182,6 +196,7 @@ export const DeployedResourceStateSchema = z.object({
   onlineEvalConfigs: z.record(z.string(), OnlineEvalDeployedStateSchema).optional(),
   policyEngines: z.record(z.string(), PolicyEngineDeployedStateSchema).optional(),
   policies: z.record(z.string(), PolicyDeployedStateSchema).optional(),
+  harnesses: z.record(z.string(), HarnessDeployedStateSchema).optional(),
   stackName: z.string().optional(),
   identityKmsKeyArn: z.string().optional(),
 });

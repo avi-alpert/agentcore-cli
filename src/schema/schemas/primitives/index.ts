@@ -44,3 +44,27 @@ export {
   PolicySchema,
   ValidationModeSchema,
 } from './policy';
+
+export type {
+  HarnessMemoryRef,
+  HarnessModel,
+  HarnessModelProvider,
+  HarnessSpec,
+  HarnessTool,
+  HarnessToolType,
+  HarnessTruncationConfig,
+} from './harness';
+export {
+  AllowedToolSchema,
+  HarnessMemoryRefSchema,
+  HarnessModelProviderSchema,
+  HarnessModelSchema,
+  HarnessNameSchema,
+  HarnessSpecSchema,
+  HarnessToolConfigSchema,
+  HarnessToolNameSchema,
+  HarnessToolSchema,
+  HarnessToolTypeSchema,
+  HarnessTruncationConfigSchema,
+  HarnessTruncationStrategySchema,
+} from './harness';

@@ -10,6 +10,7 @@ import { isReservedProjectName } from '../constants';
 import { AgentEnvSpecSchema } from './agent-env';
 import { AgentCoreGatewaySchema, AgentCoreGatewayTargetSchema, AgentCoreMcpRuntimeToolSchema } from './mcp';
 import { EvaluationLevelSchema, EvaluatorConfigSchema, EvaluatorNameSchema } from './primitives/evaluator';
+import { HarnessNameSchema } from './primitives/harness';
 import {
   DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
   DEFAULT_STRATEGY_NAMESPACES,
@@ -43,6 +44,13 @@ export type {
   RatingScale,
 } from './primitives/evaluator';
 export { BedrockModelIdSchema, isValidBedrockModelId, EvaluatorNameSchema } from './primitives/evaluator';
+export type { HarnessSpec } from './primitives/harness';
+export {
+  HarnessNameSchema,
+  HarnessSpecSchema,
+  HarnessToolTypeSchema,
+  HarnessModelProviderSchema,
+} from './primitives/harness';
 export { PolicyEngineSchema };
 export type { Policy, PolicyEngine, ValidationMode } from './primitives/policy';
 export { PolicyEngineNameSchema, PolicyNameSchema, PolicySchema, ValidationModeSchema } from './primitives/policy';
@@ -206,6 +214,17 @@ export const EvaluatorSchema = z.object({
 export type Evaluator = z.infer<typeof EvaluatorSchema>;
 
 // ============================================================================
+// Harness Registry Schema
+// ============================================================================
+
+export const HarnessRegistryEntrySchema = z.object({
+  name: HarnessNameSchema,
+  path: z.string().min(1, 'Path to harness config directory is required'),
+});
+
+export type HarnessRegistryEntry = z.infer<typeof HarnessRegistryEntrySchema>;
+
+// ============================================================================
 // Project Schema (Top Level)
 // ============================================================================
 
@@ -310,6 +329,16 @@ export const AgentCoreProjectSpecSchema = z
         uniqueBy(
           engine => engine.name,
           name => `Duplicate policy engine name: ${name}`
+        )
+      ),
+
+    harnesses: z
+      .array(HarnessRegistryEntrySchema)
+      .default([])
+      .superRefine(
+        uniqueBy(
+          harness => harness.name,
+          name => `Duplicate harness name: ${name}`
         )
       ),
   })

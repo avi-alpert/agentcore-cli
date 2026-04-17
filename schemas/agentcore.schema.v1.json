@@ -74,7 +74,7 @@
             "anyOf": [
               {
                 "type": "string",
-                "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
               },
               {
                 "type": "string",
@@ -774,7 +774,7 @@
                         },
                         "pythonVersion": {
                           "type": "string",
-                          "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                          "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
                         },
                         "timeout": {
                           "type": "integer",
@@ -839,7 +839,7 @@
                             },
                             "pythonVersion": {
                               "type": "string",
-                              "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                              "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
                             },
                             "name": {
                               "type": "string",
@@ -1269,7 +1269,7 @@
                   },
                   "pythonVersion": {
                     "type": "string",
-                    "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                    "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
                   },
                   "name": {
                     "type": "string",
@@ -1427,7 +1427,7 @@
                   },
                   "pythonVersion": {
                     "type": "string",
-                    "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                    "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
                   },
                   "timeout": {
                     "type": "integer",
@@ -1492,7 +1492,7 @@
                       },
                       "pythonVersion": {
                         "type": "string",
-                        "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13"]
+                        "enum": ["PYTHON_3_10", "PYTHON_3_11", "PYTHON_3_12", "PYTHON_3_13", "PYTHON_3_14"]
                       },
                       "name": {
                         "type": "string",
@@ -1781,6 +1781,27 @@
           }
         },
         "required": ["name"],
+        "additionalProperties": false
+      }
+    },
+    "harnesses": {
+      "default": [],
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 48,
+            "pattern": "^[a-zA-Z][a-zA-Z0-9_]{0,47}$"
+          },
+          "path": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "required": ["name", "path"],
         "additionalProperties": false
       }
     }
