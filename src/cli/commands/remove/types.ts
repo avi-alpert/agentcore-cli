@@ -2,6 +2,7 @@ export type ResourceType =
   | 'agent'
   | 'gateway'
   | 'gateway-target'
+  | 'harness'
   | 'memory'
   | 'credential'
   | 'evaluator'

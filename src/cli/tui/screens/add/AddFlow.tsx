@@ -8,6 +8,7 @@ import type { AddAgentConfig } from '../agent/types';
 import { FRAMEWORK_OPTIONS } from '../agent/types';
 import { useAddAgent } from '../agent/useAddAgent';
 import { AddEvaluatorFlow } from '../evaluator';
+import { AddHarnessFlow } from '../harness/AddHarnessFlow';
 import { AddIdentityFlow } from '../identity';
 import { AddGatewayFlow, AddGatewayTargetFlow } from '../mcp';
 import { AddMemoryFlow } from '../memory/AddMemoryFlow';
@@ -22,6 +23,7 @@ import React, { useCallback, useEffect, useState } from 'react';
 
 type FlowState =
   | { name: 'select' }
+  | { name: 'harness-wizard' }
   | { name: 'agent-wizard' }
   | { name: 'gateway-wizard' }
   | { name: 'tool-wizard' }
@@ -177,6 +179,9 @@ export function AddFlow(props: AddFlowProps) {
 
   const handleSelectResource = useCallback((resourceType: AddResourceType) => {
     switch (resourceType) {
+      case 'harness':
+        setFlow({ name: 'harness-wizard' });
+        break;
       case 'agent':
         setFlow({ name: 'agent-wizard' });
         break;
@@ -245,6 +250,18 @@ export function AddFlow(props: AddFlowProps) {
   if (flow.name === 'select') {
     // Show screen immediately - loading is instant for local files
     return <AddScreen onSelect={handleSelectResource} onExit={props.onExit} />;
+  }
+
+  if (flow.name === 'harness-wizard') {
+    return (
+      <AddHarnessFlow
+        isInteractive={props.isInteractive}
+        onBack={() => setFlow({ name: 'select' })}
+        onExit={props.onExit}
+        onDev={props.onDev}
+        onDeploy={props.onDeploy}
+      />
+    );
   }
 
   // Agent wizard - now uses AddAgentFlow with mode selection

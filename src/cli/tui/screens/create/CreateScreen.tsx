@@ -19,13 +19,20 @@ import { STATUS_COLORS } from '../../theme';
 import { AddAgentScreen } from '../agent/AddAgentScreen';
 import type { AddAgentConfig } from '../agent/types';
 import { FRAMEWORK_OPTIONS } from '../agent/types';
+import { AddHarnessScreen } from '../harness/AddHarnessScreen';
+import type { AddHarnessConfig } from '../harness/types';
 import { useCreateFlow } from './useCreateFlow';
 import { Box, Text, useApp } from 'ink';
 import { join } from 'path';
 import { useCallback, useEffect } from 'react';
 
 /** Build a text representation of the completion screen for terminal output */
-function buildExitMessage(projectName: string, steps: Step[], agentConfig: AddAgentConfig | null): string {
+function buildExitMessage(
+  projectName: string,
+  steps: Step[],
+  agentConfig: AddAgentConfig | null,
+  harnessConfig: AddHarnessConfig | null
+): string {
   const lines: string[] = [];
 
   // Title
@@ -63,6 +70,14 @@ function buildExitMessage(projectName: string, steps: Step[], agentConfig: AddAg
     const maxPathLen = Math.max(agentPath.length, agentcorePath.length);
     lines.push(`    ${agentPath.padEnd(maxPathLen)}  \x1b[2mAgent code location (empty)\x1b[0m`);
     lines.push(`    ${agentcorePath.padEnd(maxPathLen)}  \x1b[2mConfig and CDK project\x1b[0m`);
+  } else if (harnessConfig) {
+    const harnessPath = `harness/${harnessConfig.name}/`;
+    const agentcorePath = 'agentcore/';
+    const maxPathLen = Math.max(harnessPath.length, agentcorePath.length);
+    lines.push(`    ${harnessPath.padEnd(maxPathLen)}  \x1b[2mHarness (managed agent loop)\x1b[0m`);
+    lines.push(`    ${agentcorePath.padEnd(maxPathLen)}  \x1b[2mConfig and CDK project\x1b[0m`);
+    lines.push('');
+    lines.push(`\x1b[2mModel:\x1b[0m ${harnessConfig.modelId} \x1b[2mvia ${harnessConfig.modelProvider}\x1b[0m`);
   } else {
     lines.push(`    agentcore/  \x1b[2mConfig and CDK project\x1b[0m`);
   }
@@ -120,23 +135,35 @@ interface CreateScreenProps {
 }
 
 /** Next steps shown after successful project creation */
-function getCreateNextSteps(hasAgent: boolean): NextStep[] {
+function getCreateNextSteps(hasAgent: boolean, hasHarness: boolean): NextStep[] {
   if (hasAgent) {
     return [
       { command: 'dev', label: 'Run agent locally' },
       { command: 'deploy', label: 'Deploy to AWS' },
     ];
   }
+  if (hasHarness) {
+    return [{ command: 'deploy', label: 'Deploy to AWS' }];
+  }
   return [{ command: 'add', label: 'Add an agent' }];
 }
 
-const CREATE_PROMPT_ITEMS = [
-  { id: 'yes', title: 'Yes, add an agent' },
-  { id: 'no', title: "No, I'll do it later" },
+const CREATE_TYPE_ITEMS = [
+  { id: 'harness', title: 'Harness (recommended)', description: 'Managed agent loop, no code required' },
+  { id: 'agent', title: 'Agent Runtime', description: 'Start with a template or bring your own code' },
+  { id: 'skip', title: 'Skip', description: "I'll add resources later" },
 ];
 
 /** Tree-style display of created project structure */
-function CreatedSummary({ projectName, agentConfig }: { projectName: string; agentConfig: AddAgentConfig | null }) {
+function CreatedSummary({
+  projectName,
+  agentConfig,
+  harnessConfig,
+}: {
+  projectName: string;
+  agentConfig: AddAgentConfig | null;
+  harnessConfig: AddHarnessConfig | null;
+}) {
   const getFrameworkLabel = (framework: string) => {
     const option = FRAMEWORK_OPTIONS.find(o => o.id === framework);
     return option?.title ?? framework;
@@ -145,8 +172,10 @@ function CreatedSummary({ projectName, agentConfig }: { projectName: string; age
   const isCreate = agentConfig?.agentType === 'create' || agentConfig?.agentType === 'import';
   const isByo = agentConfig?.agentType === 'byo';
   const agentPath = isCreate ? `app/${agentConfig.name}/` : isByo ? agentConfig.codeLocation : null;
+  const harnessPath = harnessConfig ? `harness/${harnessConfig.name}/` : null;
+  const resourcePath = agentPath || harnessPath;
   const agentcorePath = 'agentcore/';
-  const maxPathLen = agentPath ? Math.max(agentPath.length, agentcorePath.length) : agentcorePath.length;
+  const maxPathLen = resourcePath ? Math.max(resourcePath.length, agentcorePath.length) : agentcorePath.length;
 
   return (
     <Box flexDirection="column" marginTop={1}>
@@ -172,6 +201,14 @@ function CreatedSummary({ projectName, agentConfig }: { projectName: string; age
             </Text>
           </Box>
         )}
+        {harnessConfig && harnessPath && (
+          <Box marginLeft={2}>
+            <Text>
+              {harnessPath.padEnd(maxPathLen)}
+              <Text dimColor>{'  '}Harness (managed agent loop)</Text>
+            </Text>
+          </Box>
+        )}
         <Box marginLeft={2}>
           <Text>
             {agentcorePath.padEnd(maxPathLen)}
@@ -184,6 +221,13 @@ function CreatedSummary({ projectName, agentConfig }: { projectName: string; age
           <Text dimColor>Model: </Text>
           <Text>{DEFAULT_MODEL_IDS[agentConfig.modelProvider]}</Text>
           <Text dimColor> via {agentConfig.modelProvider}</Text>
+        </Box>
+      )}
+      {harnessConfig && (
+        <Box marginTop={1}>
+          <Text dimColor>Model: </Text>
+          <Text>{harnessConfig.modelId}</Text>
+          <Text dimColor> via {harnessConfig.modelProvider}</Text>
         </Box>
       )}
       {isByo && agentConfig && (
@@ -213,12 +257,12 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
   const handleExit = useCallback(() => {
     if (allSuccess && isInteractive) {
       // Set message to be printed after TUI exits (full completion screen)
-      setExitMessage(buildExitMessage(flow.projectName, flow.steps, flow.addAgentConfig));
+      setExitMessage(buildExitMessage(flow.projectName, flow.steps, flow.addAgentConfig, flow.addHarnessConfig));
       exit();
     } else {
       onExit();
     }
-  }, [allSuccess, isInteractive, flow.projectName, flow.steps, flow.addAgentConfig, exit, onExit]);
+  }, [allSuccess, isInteractive, flow.projectName, flow.steps, flow.addAgentConfig, flow.addHarnessConfig, exit, onExit]);
 
   // Auto-exit when project creation completes successfully
   useEffect(() => {
@@ -227,14 +271,14 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
     }
   }, [allSuccess, handleExit]);
 
-  // Create prompt navigation
-  const { selectedIndex: createPromptIndex } = useListNavigation({
-    items: CREATE_PROMPT_ITEMS,
+  // Create type selection navigation
+  const { selectedIndex: createTypeIndex } = useListNavigation({
+    items: CREATE_TYPE_ITEMS,
     onSelect: item => {
-      flow.setWantsCreate(item.id === 'yes');
+      flow.handleCreateTypeSelection(item.id as 'harness' | 'agent' | 'skip');
     },
     onExit: handleExit,
-    isActive: flow.phase === 'create-prompt',
+    isActive: flow.phase === 'create-type-prompt',
   });
 
   // Checking phase: brief loading state
@@ -286,8 +330,8 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
     );
   }
 
-  // Create prompt phase
-  if (flow.phase === 'create-prompt') {
+  // Create type selection phase
+  if (flow.phase === 'create-type-prompt') {
     return (
       <Screen title="AgentCore Create" onExit={handleExit} helpText={HELP_TEXT.NAVIGATE_SELECT}>
         <Box marginBottom={1}>
@@ -296,9 +340,9 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
           </Text>
         </Box>
         <Box flexDirection="column">
-          <Text>Would you like to add an agent now?</Text>
+          <Text>What would you like to build?</Text>
           <Box marginTop={1}>
-            <SelectList items={CREATE_PROMPT_ITEMS} selectedIndex={createPromptIndex} />
+            <SelectList items={CREATE_TYPE_ITEMS} selectedIndex={createTypeIndex} />
           </Box>
         </Box>
       </Screen>
@@ -312,6 +356,17 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
         existingAgentNames={[]}
         onComplete={flow.handleAddAgentComplete}
         onExit={flow.goBackFromAddAgent}
+      />
+    );
+  }
+
+  // Harness wizard phase
+  if (flow.phase === 'harness-wizard') {
+    return (
+      <AddHarnessScreen
+        existingHarnessNames={[]}
+        onComplete={flow.handleAddHarnessComplete}
+        onExit={flow.goBackFromHarnessWizard}
       />
     );
   }
@@ -332,14 +387,18 @@ export function CreateScreen({ cwd, isInteractive, onExit, onNavigate }: CreateS
       <StepProgress steps={flow.steps} />
       {allSuccess && flow.outputDir && (
         <Box marginTop={1} flexDirection="column">
-          <CreatedSummary projectName={flow.projectName} agentConfig={flow.addAgentConfig} />
+          <CreatedSummary
+            projectName={flow.projectName}
+            agentConfig={flow.addAgentConfig}
+            harnessConfig={flow.addHarnessConfig}
+          />
           {isInteractive ? (
             <Box marginTop={1}>
               <Text color="green">Project created successfully!</Text>
             </Box>
           ) : (
             <NextSteps
-              steps={getCreateNextSteps(flow.addAgentConfig !== null)}
+              steps={getCreateNextSteps(flow.addAgentConfig !== null, flow.addHarnessConfig !== null)}
               isInteractive={isInteractive}
               onSelect={step => {
                 if (onNavigate) {

@@ -20,6 +20,7 @@ import { withMinDuration } from '../../utils';
 import { mapByoConfigToAgent } from '../agent';
 import type { AddAgentConfig } from '../agent/types';
 import type { GenerateConfig } from '../generate/types';
+import type { AddHarnessConfig } from '../harness/types';
 import { mkdir } from 'fs/promises';
 import { basename, join } from 'path';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,8 +29,9 @@ type CreatePhase =
   | 'checking'
   | 'existing-project-error'
   | 'input'
-  | 'create-prompt'
+  | 'create-type-prompt'
   | 'create-wizard'
+  | 'harness-wizard'
   | 'running'
   | 'complete';
 
@@ -45,16 +47,23 @@ interface CreateFlowState {
   // Project name actions
   setProjectName: (name: string) => void;
   confirmProjectName: () => void;
-  // Create prompt actions
-  wantsCreate: boolean;
-  setWantsCreate: (wants: boolean) => void;
+  // Create type selection
+  handleCreateTypeSelection: (choice: 'harness' | 'agent' | 'skip') => void;
   // Add agent config (set when AddAgentScreen completes)
   addAgentConfig: AddAgentConfig | null;
   handleAddAgentComplete: (config: AddAgentConfig) => void;
   goBackFromAddAgent: () => void;
+  // Add harness config (set when AddHarnessScreen completes)
+  addHarnessConfig: AddHarnessConfig | null;
+  handleAddHarnessComplete: (config: AddHarnessConfig) => void;
+  goBackFromHarnessWizard: () => void;
 }
 
-function getCreateSteps(projectName: string, agentConfig: AddAgentConfig | null): Step[] {
+function getCreateSteps(
+  projectName: string,
+  agentConfig: AddAgentConfig | null,
+  harnessConfig: AddHarnessConfig | null
+): Step[] {
   const steps: Step[] = [{ label: `Create ${projectName}/ project directory`, status: 'pending' }];
 
   if (agentConfig) {
@@ -62,6 +71,8 @@ function getCreateSteps(projectName: string, agentConfig: AddAgentConfig | null)
     if (agentConfig.language === 'Python' && agentConfig.agentType === 'create') {
       steps.push({ label: 'Set up Python environment', status: 'pending' });
     }
+  } else if (harnessConfig) {
+    steps.push({ label: 'Add harness to project', status: 'pending' });
   }
 
   steps.push({ label: 'Prepare agentcore/ directory', status: 'pending' });
@@ -107,11 +118,11 @@ export function useCreateFlow(cwd: string): CreateFlowState {
   const [outputDir, setOutputDir] = useState<string>();
   const [logFilePath, setLogFilePath] = useState<string | undefined>();
 
-  // Create prompt state
-  const [wantsCreate, setWantsCreate] = useState(false);
-
   // Add agent config (from AddAgentScreen)
   const [addAgentConfig, setAddAgentConfig] = useState<AddAgentConfig | null>(null);
+
+  // Add harness config (from AddHarnessScreen)
+  const [addHarnessConfig, setAddHarnessConfig] = useState<AddHarnessConfig | null>(null);
 
   // Logger ref for the create operation
   const loggerRef = useRef<CreateLogger | null>(null);
@@ -137,24 +148,28 @@ export function useCreateFlow(cwd: string): CreateFlowState {
   }, [cwd, phase]);
 
   const confirmProjectName = useCallback(() => {
-    setPhase('create-prompt');
+    setPhase('create-type-prompt');
   }, []);
 
   const updateStep = (index: number, update: Partial<Step>) => {
     setSteps(prev => prev.map((s, i) => (i === index ? { ...s, ...update } : s)));
   };
 
-  // Create prompt handlers
-  const handleSetWantsCreate = useCallback(
-    (wants: boolean) => {
-      setWantsCreate(wants);
-      if (wants) {
-        setAddAgentConfig(null); // Reset any previous config
+  // Create type selection handler
+  const handleCreateTypeSelection = useCallback(
+    (choice: 'harness' | 'agent' | 'skip') => {
+      if (choice === 'harness') {
+        setAddAgentConfig(null);
+        setAddHarnessConfig(null);
+        setPhase('harness-wizard');
+      } else if (choice === 'agent') {
+        setAddAgentConfig(null);
+        setAddHarnessConfig(null);
         setPhase('create-wizard');
       } else {
-        // Skip add agent, go straight to running
         setAddAgentConfig(null);
-        setSteps(getCreateSteps(projectName, null));
+        setAddHarnessConfig(null);
+        setSteps(getCreateSteps(projectName, null, null));
         setPhase('running');
       }
     },
@@ -165,15 +180,30 @@ export function useCreateFlow(cwd: string): CreateFlowState {
   const handleAddAgentComplete = useCallback(
     (config: AddAgentConfig) => {
       setAddAgentConfig(config);
-      setSteps(getCreateSteps(projectName, config));
+      setSteps(getCreateSteps(projectName, config, null));
       setPhase('running');
     },
     [projectName]
   );
 
-  // Go back from add agent wizard to create prompt
+  // Go back from add agent wizard to create type prompt
   const goBackFromAddAgent = useCallback(() => {
-    setPhase('create-prompt');
+    setPhase('create-type-prompt');
+  }, []);
+
+  // Handle completion from AddHarnessScreen
+  const handleAddHarnessComplete = useCallback(
+    (config: AddHarnessConfig) => {
+      setAddHarnessConfig(config);
+      setSteps(getCreateSteps(projectName, null, config));
+      setPhase('running');
+    },
+    [projectName]
+  );
+
+  // Go back from harness wizard to create type prompt
+  const goBackFromHarnessWizard = useCallback(() => {
+    setPhase('create-type-prompt');
   }, []);
 
   // Main running effect
@@ -448,6 +478,46 @@ export function useCreateFlow(cwd: string): CreateFlowState {
           }
         }
 
+        // Step: Add harness to project (if addHarnessConfig is set)
+        if (!addAgentConfig && addHarnessConfig) {
+          logger.startStep('Add harness to project');
+          updateStep(stepIndex, { status: 'running' });
+          try {
+            await withMinDuration(async () => {
+              logger.logSubStep(`Adding harness: ${addHarnessConfig.name}`);
+              const { harnessPrimitive } = await import('../../../primitives/registry');
+              const result = await harnessPrimitive.add({
+                name: addHarnessConfig.name,
+                modelProvider: addHarnessConfig.modelProvider,
+                modelId: addHarnessConfig.modelId,
+                apiKeyArn: addHarnessConfig.apiKeyArn,
+                maxIterations: addHarnessConfig.maxIterations,
+                maxTokens: addHarnessConfig.maxTokens,
+                timeoutSeconds: addHarnessConfig.timeoutSeconds,
+                truncationStrategy: addHarnessConfig.truncationStrategy,
+                networkMode: addHarnessConfig.networkMode,
+                subnets: addHarnessConfig.subnets,
+                securityGroups: addHarnessConfig.securityGroups,
+                idleTimeout: addHarnessConfig.idleTimeout,
+                maxLifetime: addHarnessConfig.maxLifetime,
+                configBaseDir,
+              });
+              if (!result.success) {
+                throw new Error(result.error);
+              }
+            });
+            logger.endStep('success');
+            updateStep(stepIndex, { status: 'success' });
+            stepIndex++;
+          } catch (err) {
+            const errMsg = getErrorMessage(err);
+            logger.endStep('error', errMsg);
+            updateStep(stepIndex, { status: 'error', error: errMsg });
+            logger.finalize(false);
+            return;
+          }
+        }
+
         // Step: Create CDK project
         logger.startStep('Prepare agentcore/ directory (CDK project)');
         updateStep(stepIndex, { status: 'running' });
@@ -483,6 +553,7 @@ export function useCreateFlow(cwd: string): CreateFlowState {
           logger.endStep('success');
           updateStep(stepIndex, { status: 'success' });
         }
+        stepIndex++;
 
         logger.finalize(true);
         setPhase('complete');
@@ -519,12 +590,15 @@ export function useCreateFlow(cwd: string): CreateFlowState {
     logFilePath,
     setProjectName,
     confirmProjectName,
-    // Create prompt
-    wantsCreate,
-    setWantsCreate: handleSetWantsCreate,
+    // Create type selection
+    handleCreateTypeSelection,
     // Add agent
     addAgentConfig,
     handleAddAgentComplete,
     goBackFromAddAgent,
+    // Add harness
+    addHarnessConfig,
+    handleAddHarnessComplete,
+    goBackFromHarnessWizard,
   };
 }

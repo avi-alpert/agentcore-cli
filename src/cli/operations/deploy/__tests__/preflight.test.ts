@@ -78,7 +78,7 @@ describe('validateProject', () => {
     mockReadDeployedState.mockRejectedValue(new Error('No deployed state'));
 
     await expect(validateProject()).rejects.toThrow(
-      'No resources defined in project. Add at least one resource (agent, memory, evaluator, or gateway) before deploying.'
+      'No resources defined in project. Add at least one resource (agent, memory, evaluator, gateway, or harness) before deploying.'
     );
   });
 

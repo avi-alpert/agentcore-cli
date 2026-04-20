@@ -286,6 +286,77 @@ describe('ConfigIO', () => {
     });
   });
 
+  describe('writeHarnessSpec and readHarnessSpec', () => {
+    it('round-trips valid harness spec', async () => {
+      const projectDir = join(testDir, `harness-rt-${randomUUID()}`);
+      const agentcoreDir = join(projectDir, 'agentcore');
+      mkdirSync(agentcoreDir, { recursive: true });
+
+      const configIO = new ConfigIO({ baseDir: agentcoreDir });
+
+      const harnessSpec = {
+        name: 'testHarness',
+        model: {
+          provider: 'bedrock',
+          modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        },
+        tools: [],
+      } as any;
+
+      await configIO.writeHarnessSpec('testHarness', harnessSpec);
+
+      const harnessDir = join(agentcoreDir, 'harnesses', 'testHarness');
+      const harnessFile = join(harnessDir, 'harness.json');
+      expect(existsSync(harnessFile)).toBe(true);
+
+      const readBack = await configIO.readHarnessSpec('testHarness');
+      expect(readBack.name).toBe('testHarness');
+      expect(readBack.model.provider).toBe('bedrock');
+      expect(readBack.model.modelId).toBe('anthropic.claude-3-5-sonnet-20240620-v1:0');
+    });
+
+    it('throws ConfigNotFoundError when harness.json does not exist', async () => {
+      const projectDir = join(testDir, `harness-missing-${randomUUID()}`);
+      const agentcoreDir = join(projectDir, 'agentcore');
+      mkdirSync(agentcoreDir, { recursive: true });
+
+      const configIO = new ConfigIO({ baseDir: agentcoreDir });
+
+      await expect(configIO.readHarnessSpec('nonexistent-harness')).rejects.toThrow(ConfigNotFoundError);
+    });
+
+    it('throws ConfigValidationError for invalid harness data', async () => {
+      const projectDir = join(testDir, `harness-invalid-${randomUUID()}`);
+      const agentcoreDir = join(projectDir, 'agentcore');
+      mkdirSync(agentcoreDir, { recursive: true });
+
+      const configIO = new ConfigIO({ baseDir: agentcoreDir });
+
+      const invalidSpec = { invalid: 'data' } as any;
+
+      await expect(configIO.writeHarnessSpec('bad-harness', invalidSpec)).rejects.toThrow(ConfigValidationError);
+    });
+
+    it('throws NoProjectError when no project exists', async () => {
+      const emptyDir = join(testDir, `empty-harness-${randomUUID()}`);
+      await mkdir(emptyDir, { recursive: true });
+      changeWorkingDir(emptyDir);
+
+      const configIO = new ConfigIO();
+
+      const validSpec = {
+        name: 'testHarness',
+        model: {
+          provider: 'bedrock',
+          modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        },
+        tools: [],
+      } as any;
+
+      await expect(configIO.writeHarnessSpec('testHarness', validSpec)).rejects.toThrow(NoProjectError);
+    });
+  });
+
   describe('resolveAWSDeploymentTargets region handling (issue #772)', () => {
     let projectDir: string;
     let agentcoreDir: string;

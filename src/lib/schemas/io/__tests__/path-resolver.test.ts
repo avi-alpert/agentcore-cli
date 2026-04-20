@@ -204,6 +204,21 @@ describe('PathResolver', () => {
     expect(resolver.getMcpDefsPath()).toBe(join('/base', 'mcp-defs.json'));
   });
 
+  it('getHarnessesDir returns harnesses directory path', () => {
+    const resolver = new PathResolver({ baseDir: '/base' });
+    expect(resolver.getHarnessesDir()).toBe(join('/base', 'harnesses'));
+  });
+
+  it('getHarnessDir returns specific harness directory path', () => {
+    const resolver = new PathResolver({ baseDir: '/base' });
+    expect(resolver.getHarnessDir('myHarness')).toBe(join('/base', 'harnesses', 'myHarness'));
+  });
+
+  it('getHarnessConfigPath returns harness config file path', () => {
+    const resolver = new PathResolver({ baseDir: '/base' });
+    expect(resolver.getHarnessConfigPath('myHarness')).toBe(join('/base', 'harnesses', 'myHarness', 'harness.json'));
+  });
+
   it('setBaseDir updates the base directory', () => {
     const resolver = new PathResolver({ baseDir: '/old' });
     resolver.setBaseDir('/new');

@@ -4,6 +4,7 @@ import { CredentialPrimitive } from './CredentialPrimitive';
 import { EvaluatorPrimitive } from './EvaluatorPrimitive';
 import { GatewayPrimitive } from './GatewayPrimitive';
 import { GatewayTargetPrimitive } from './GatewayTargetPrimitive';
+import { HarnessPrimitive } from './HarnessPrimitive';
 import { MemoryPrimitive } from './MemoryPrimitive';
 import { OnlineEvalConfigPrimitive } from './OnlineEvalConfigPrimitive';
 import { PolicyEnginePrimitive } from './PolicyEnginePrimitive';
@@ -14,6 +15,7 @@ import type { RemovableResource } from './types';
  * Singleton instances of all primitives.
  */
 export const agentPrimitive = new AgentPrimitive();
+export const harnessPrimitive = new HarnessPrimitive();
 export const memoryPrimitive = new MemoryPrimitive();
 export const credentialPrimitive = new CredentialPrimitive();
 export const evaluatorPrimitive = new EvaluatorPrimitive();
@@ -28,6 +30,7 @@ export const policyPrimitive = new PolicyPrimitive();
  */
 export const ALL_PRIMITIVES: BasePrimitive<unknown, RemovableResource>[] = [
   agentPrimitive,
+  harnessPrimitive,
   memoryPrimitive,
   credentialPrimitive,
   evaluatorPrimitive,

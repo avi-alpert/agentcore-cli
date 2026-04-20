@@ -452,23 +452,20 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       },
     };
 
+    let harnessDeployError: string | undefined;
     if (imperativeManager.hasDeployersForPhase('post-cdk', imperativeContext)) {
       startStep('Deploy harnesses');
       const postCdkResult = await imperativeManager.runPhase('post-cdk', imperativeContext);
       if (!postCdkResult.success) {
         endStep('error', postCdkResult.error);
-        logger.finalize(false);
-        return {
-          success: false,
-          error: `Harness deployment failed: ${postCdkResult.error}`,
-          logPath: logger.getRelativeLogPath(),
-        };
+        harnessDeployError = postCdkResult.error;
+      } else {
+        const harnessResult = postCdkResult.results.get('harness');
+        if (harnessResult?.state) {
+          deployedHarnesses = harnessResult.state as Record<string, HarnessDeployedState>;
+        }
+        endStep('success');
       }
-      const harnessResult = postCdkResult.results.get('harness');
-      if (harnessResult?.state) {
-        deployedHarnesses = harnessResult.state as Record<string, HarnessDeployedState>;
-      }
-      endStep('success');
     }
 
     const deployedState = buildDeployedState({
@@ -487,6 +484,15 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       harnesses: deployedHarnesses,
     });
     await configIO.writeDeployedState(deployedState);
+
+    if (harnessDeployError) {
+      logger.finalize(false);
+      return {
+        success: false,
+        error: `Harness deployment failed: ${harnessDeployError}`,
+        logPath: logger.getRelativeLogPath(),
+      };
+    }
 
     // Show gateway URLs and target sync status
     if (Object.keys(gateways).length > 0) {

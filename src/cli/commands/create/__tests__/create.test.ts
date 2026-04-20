@@ -70,7 +70,8 @@ describe('create command', () => {
     });
 
     it('requires all options without --no-agent', async () => {
-      const result = await runCLI(['create', '--name', 'Incomplete', '--json'], testDir);
+      // --framework triggers the agent path, which requires --language, --model-provider, etc.
+      const result = await runCLI(['create', '--name', 'Incomplete', '--framework', 'Strands', '--json'], testDir);
 
       expect(result.exitCode).toBe(1);
       const json = JSON.parse(result.stdout);
@@ -161,7 +162,8 @@ describe('create command', () => {
   describe('--dry-run', () => {
     it('shows files without creating', async () => {
       const name = `DryRun${Date.now()}`;
-      const result = await runCLI(['create', '--name', name, '--defaults', '--dry-run'], testDir);
+      // --framework triggers agent path where --dry-run is supported
+      const result = await runCLI(['create', '--name', name, '--defaults', '--framework', 'Strands', '--dry-run'], testDir);
 
       expect(result.exitCode).toBe(0);
       expect(result.stdout.includes('would create') || result.stdout.includes('Dry run')).toBeTruthy();

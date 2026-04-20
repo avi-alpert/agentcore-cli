@@ -252,7 +252,8 @@ describe('Add Agent BYO Flow: Lifecycle Configuration via TUI', () => {
     expect(atAdd).toBe(true);
     saveTextScreenshot(session, 'byo-02-add-resource');
 
-    // Select Agent (first option)
+    // Select Agent (second option, after Harness)
+    await session.sendSpecialKey('down');
     await session.sendSpecialKey('enter');
 
     const atAgent = await safeWaitFor(session, /agent|Name/i, 5_000);

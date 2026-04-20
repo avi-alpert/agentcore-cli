@@ -133,9 +133,9 @@ describe('Add Gateway JWT Flow', () => {
 
   it('Step 1c: navigates to Gateway and enters the wizard', async () => {
     // Add Resource list order:
-    //   0: Agent, 1: Memory, 2: Identity, 3: Evaluator,
-    //   4: Online Eval Config, 5: Gateway, 6: Gateway Target
-    for (let i = 0; i < 5; i++) {
+    //   0: Harness, 1: Agent, 2: Memory, 3: Credential, 4: Evaluator,
+    //   5: Online Eval Config, 6: Gateway, 7: Gateway Target, 8: Policy
+    for (let i = 0; i < 6; i++) {
       await session.sendSpecialKey('down');
     }
     await settle();

@@ -2,6 +2,7 @@ import type { SelectableItem } from '../../components';
 import { SelectScreen } from '../../components';
 
 const ADD_RESOURCES = [
+  { id: 'harness', title: 'Harness', description: 'Managed agent loop, no code required' },
   { id: 'agent', title: 'Agent', description: 'Deploy an HTTP, MCP, or A2A agent' },
   { id: 'memory', title: 'Memory', description: 'Persistent context storage' },
   { id: 'credential', title: 'Credential', description: 'API key credential providers' },

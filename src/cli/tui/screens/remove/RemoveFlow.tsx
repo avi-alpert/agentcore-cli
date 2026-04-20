@@ -83,6 +83,7 @@ interface RemoveFlowProps {
   /** Initial resource type to start at (for CLI subcommands) */
   initialResourceType?:
     | 'agent'
+    | 'harness'
     | 'gateway'
     | 'gateway-target'
     | 'memory'

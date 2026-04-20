@@ -44,7 +44,7 @@ export type {
   RatingScale,
 } from './primitives/evaluator';
 export { BedrockModelIdSchema, isValidBedrockModelId, EvaluatorNameSchema } from './primitives/evaluator';
-export type { HarnessSpec } from './primitives/harness';
+export type { HarnessSpec, HarnessModelProvider } from './primitives/harness';
 export {
   HarnessNameSchema,
   HarnessSpecSchema,

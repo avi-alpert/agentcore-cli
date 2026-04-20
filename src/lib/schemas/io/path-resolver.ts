@@ -1,4 +1,4 @@
-import { CLI_LOGS_DIR, CLI_SYSTEM_DIR, CONFIG_DIR, CONFIG_FILES as _CONFIG_FILES } from '../../constants';
+import { CLI_LOGS_DIR, CLI_SYSTEM_DIR, CONFIG_DIR, CONFIG_FILES as _CONFIG_FILES, HARNESS_DIR } from '../../constants';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 
@@ -200,6 +200,27 @@ export class PathResolver {
    */
   getMcpDefsPath(): string {
     return join(this.config.baseDir, CONFIG_FILES.MCP_DEFS);
+  }
+
+  /**
+   * Get the path to the harnesses directory (agentcore/harnesses/)
+   */
+  getHarnessesDir(): string {
+    return join(this.config.baseDir, HARNESS_DIR);
+  }
+
+  /**
+   * Get the path to a specific harness directory (agentcore/harnesses/<harnessName>/)
+   */
+  getHarnessDir(harnessName: string): string {
+    return join(this.config.baseDir, HARNESS_DIR, harnessName);
+  }
+
+  /**
+   * Get the path to a specific harness config file (agentcore/harnesses/<harnessName>/harness.json)
+   */
+  getHarnessConfigPath(harnessName: string): string {
+    return join(this.config.baseDir, HARNESS_DIR, harnessName, 'harness.json');
   }
 
   /**

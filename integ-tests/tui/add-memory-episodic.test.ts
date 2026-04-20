@@ -94,7 +94,8 @@ describe('Add Memory with EPISODIC Strategy', () => {
   });
 
   it('Step 3: selects Memory from the resource list', async () => {
-    // Add Resource list: 0: Agent, 1: Memory
+    // Add Resource list: 0: Harness, 1: Agent, 2: Memory
+    await session.sendSpecialKey('down');
     await session.sendSpecialKey('down');
     await settle();
 
