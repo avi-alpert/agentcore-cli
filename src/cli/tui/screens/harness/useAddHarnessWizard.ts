@@ -1,5 +1,5 @@
 import type { HarnessModelProvider, NetworkMode } from '../../../../schema';
-import type { AddHarnessConfig, AddHarnessStep, AdvancedSetting } from './types';
+import type { AddHarnessConfig, AddHarnessStep, AdvancedSetting, ContainerMode } from './types';
 import { useCallback, useMemo, useState } from 'react';
 
 const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
@@ -32,12 +32,17 @@ export function useAddHarnessWizard() {
   const allSteps = useMemo(() => {
     const steps: AddHarnessStep[] = ['name', 'model-provider', 'model-id'];
 
-    // Add api-key-arn step for non-bedrock providers
     if (config.modelProvider !== 'bedrock') {
       steps.push('api-key-arn');
     }
 
-    // Always show advanced settings selection
+    steps.push('container');
+    if (config.containerMode === 'uri') {
+      steps.push('container-uri');
+    } else if (config.containerMode === 'dockerfile') {
+      steps.push('container-dockerfile');
+    }
+
     steps.push('advanced');
 
     // Add steps based on advanced settings selections
@@ -64,7 +69,7 @@ export function useAddHarnessWizard() {
     steps.push('confirm');
 
     return steps;
-  }, [config.modelProvider, config.networkMode, advancedSettings]);
+  }, [config.modelProvider, config.containerMode, config.networkMode, advancedSettings]);
 
   const currentIndex = allSteps.indexOf(step);
 
@@ -118,16 +123,42 @@ export function useAddHarnessWizard() {
     [nextStep]
   );
 
-  const setAdvancedSettings = useCallback(
-    (settings: AdvancedSetting[]) => {
-      setAdvancedSettingsState(settings);
-      // Compute next step directly from incoming settings rather than relying
-      // on allSteps which still reflects the previous (empty) advancedSettings.
-      const firstAdvancedStep = getFirstAdvancedStep(settings);
-      setStep(firstAdvancedStep ?? 'confirm');
+  const setContainerMode = useCallback((containerMode: ContainerMode) => {
+    setConfig(c => ({ ...c, containerMode, containerUri: undefined, dockerfilePath: undefined }));
+    if (containerMode === 'uri') {
+      setStep('container-uri');
+    } else if (containerMode === 'dockerfile') {
+      setStep('container-dockerfile');
+    } else {
+      setStep('advanced');
+    }
+  }, []);
+
+  const setContainerUri = useCallback(
+    (containerUri: string) => {
+      setConfig(c => ({ ...c, containerUri }));
+      const next = nextStep('container-uri');
+      if (next) setStep(next);
     },
-    []
+    [nextStep]
   );
+
+  const setDockerfilePath = useCallback(
+    (dockerfilePath: string) => {
+      setConfig(c => ({ ...c, dockerfilePath }));
+      const next = nextStep('container-dockerfile');
+      if (next) setStep(next);
+    },
+    [nextStep]
+  );
+
+  const setAdvancedSettings = useCallback((settings: AdvancedSetting[]) => {
+    setAdvancedSettingsState(settings);
+    // Compute next step directly from incoming settings rather than relying
+    // on allSteps which still reflects the previous (empty) advancedSettings.
+    const firstAdvancedStep = getFirstAdvancedStep(settings);
+    setStep(firstAdvancedStep ?? 'confirm');
+  }, []);
 
   const setNetworkMode = useCallback(
     (networkMode: NetworkMode) => {
@@ -149,7 +180,10 @@ export function useAddHarnessWizard() {
 
   const setSubnets = useCallback(
     (subnetsStr: string) => {
-      const subnets = subnetsStr.split(',').map(s => s.trim()).filter(Boolean);
+      const subnets = subnetsStr
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
       setConfig(c => ({ ...c, subnets }));
       const next = nextStep('subnets');
       if (next) setStep(next);
@@ -159,7 +193,10 @@ export function useAddHarnessWizard() {
 
   const setSecurityGroups = useCallback(
     (sgStr: string) => {
-      const securityGroups = sgStr.split(',').map(s => s.trim()).filter(Boolean);
+      const securityGroups = sgStr
+        .split(',')
+        .map(s => s.trim())
+        .filter(Boolean);
       setConfig(c => ({ ...c, securityGroups }));
       const next = nextStep('security-groups');
       if (next) setStep(next);
@@ -243,6 +280,9 @@ export function useAddHarnessWizard() {
     setModelProvider,
     setModelId,
     setApiKeyArn,
+    setContainerMode,
+    setContainerUri,
+    setDockerfilePath,
     setAdvancedSettings,
     setNetworkMode,
     setSubnets,

@@ -1,10 +1,15 @@
 import type { HarnessModelProvider, NetworkMode } from '../../../../schema';
 
+export type ContainerMode = 'none' | 'uri' | 'dockerfile';
+
 export type AddHarnessStep =
   | 'name'
   | 'model-provider'
   | 'model-id'
   | 'api-key-arn'
+  | 'container'
+  | 'container-uri'
+  | 'container-dockerfile'
   | 'advanced'
   | 'network-mode'
   | 'subnets'
@@ -22,6 +27,9 @@ export interface AddHarnessConfig {
   modelProvider: HarnessModelProvider;
   modelId: string;
   apiKeyArn?: string;
+  containerMode?: ContainerMode;
+  containerUri?: string;
+  dockerfilePath?: string;
   maxIterations?: number;
   maxTokens?: number;
   timeoutSeconds?: number;
@@ -38,6 +46,9 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   'model-provider': 'Model provider',
   'model-id': 'Model',
   'api-key-arn': 'API key ARN',
+  container: 'Container',
+  'container-uri': 'Container URI',
+  'container-dockerfile': 'Dockerfile path',
   advanced: 'Advanced settings',
   'network-mode': 'Network mode',
   subnets: 'Subnets',
@@ -77,6 +88,12 @@ export const ADVANCED_SETTING_OPTIONS = [
 ] as const;
 
 export type AdvancedSetting = (typeof ADVANCED_SETTING_OPTIONS)[number]['id'];
+
+export const CONTAINER_MODE_OPTIONS = [
+  { id: 'none' as const, title: 'None', description: 'Use the default managed runtime' },
+  { id: 'uri' as const, title: 'Container URI', description: 'Use a pre-built container image (ECR URI)' },
+  { id: 'dockerfile' as const, title: 'Dockerfile', description: 'Build from a Dockerfile' },
+] as const;
 
 export const NETWORK_MODE_OPTIONS = [
   { id: 'PUBLIC' as const, title: 'Public', description: 'Internet-facing' },

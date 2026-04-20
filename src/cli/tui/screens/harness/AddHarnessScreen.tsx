@@ -15,10 +15,11 @@ import type { SelectableItem } from '../../components';
 import { HELP_TEXT } from '../../constants';
 import { useListNavigation, useMultiSelectNavigation } from '../../hooks';
 import { generateUniqueName } from '../../utils';
-import type { AddHarnessConfig, AdvancedSetting } from './types';
+import type { AddHarnessConfig, AdvancedSetting, ContainerMode } from './types';
 import {
   ADVANCED_SETTING_OPTIONS,
   BEDROCK_MODEL_OPTIONS,
+  CONTAINER_MODE_OPTIONS,
   HARNESS_STEP_LABELS,
   MODEL_PROVIDER_OPTIONS,
   NETWORK_MODE_OPTIONS,
@@ -46,6 +47,11 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     []
   );
 
+  const containerModeItems: SelectableItem[] = useMemo(
+    () => CONTAINER_MODE_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
+    []
+  );
+
   const advancedSettingItems: SelectableItem[] = useMemo(
     () => ADVANCED_SETTING_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
     []
@@ -65,6 +71,9 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
   const isModelProviderStep = wizard.step === 'model-provider';
   const isModelIdStep = wizard.step === 'model-id';
   const isApiKeyArnStep = wizard.step === 'api-key-arn';
+  const isContainerStep = wizard.step === 'container';
+  const isContainerUriStep = wizard.step === 'container-uri';
+  const isContainerDockerfileStep = wizard.step === 'container-dockerfile';
   const isAdvancedStep = wizard.step === 'advanced';
   const isNetworkModeStep = wizard.step === 'network-mode';
   const isSubnetsStep = wizard.step === 'subnets';
@@ -89,6 +98,13 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     onSelect: item => wizard.setModelId(item.id),
     onExit: () => wizard.goBack(),
     isActive: isModelIdStep && wizard.config.modelProvider === 'bedrock',
+  });
+
+  const containerModeNav = useListNavigation({
+    items: containerModeItems,
+    onSelect: item => wizard.setContainerMode(item.id as ContainerMode),
+    onExit: () => wizard.goBack(),
+    isActive: isContainerStep,
   });
 
   const advancedSettingsNav = useMultiSelectNavigation({
@@ -123,7 +139,11 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
 
   const helpText = isAdvancedStep
     ? 'Space toggle · Enter confirm · Esc back'
-    : isModelProviderStep || isNetworkModeStep || isTruncationStrategyStep || (isModelIdStep && wizard.config.modelProvider === 'bedrock')
+    : isModelProviderStep ||
+        isContainerStep ||
+        isNetworkModeStep ||
+        isTruncationStrategyStep ||
+        (isModelIdStep && wizard.config.modelProvider === 'bedrock')
       ? HELP_TEXT.NAVIGATE_SELECT
       : isConfirmStep
         ? HELP_TEXT.CONFIRM_CANCEL
@@ -140,6 +160,14 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
 
     if (wizard.config.apiKeyArn) {
       fields.push({ label: 'API Key ARN', value: wizard.config.apiKeyArn });
+    }
+
+    if (wizard.config.containerUri) {
+      fields.push({ label: 'Container URI', value: wizard.config.containerUri });
+    }
+
+    if (wizard.config.dockerfilePath) {
+      fields.push({ label: 'Dockerfile', value: wizard.config.dockerfilePath });
     }
 
     if (wizard.config.networkMode) {
@@ -242,6 +270,37 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
           />
         )}
 
+        {isContainerStep && (
+          <WizardSelect
+            title="Custom container"
+            description="Optionally provide a custom container image for the harness runtime"
+            items={containerModeItems}
+            selectedIndex={containerModeNav.selectedIndex}
+          />
+        )}
+
+        {isContainerUriStep && (
+          <TextInput
+            key="container-uri"
+            prompt="Container image URI (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-harness:latest)"
+            initialValue=""
+            onSubmit={wizard.setContainerUri}
+            onCancel={() => wizard.goBack()}
+            customValidation={value => (value.trim().length > 0 ? true : 'Container URI is required')}
+          />
+        )}
+
+        {isContainerDockerfileStep && (
+          <TextInput
+            key="container-dockerfile"
+            prompt="Path to Dockerfile"
+            initialValue=""
+            onSubmit={wizard.setDockerfilePath}
+            onCancel={() => wizard.goBack()}
+            customValidation={value => (value.trim().length > 0 ? true : 'Dockerfile path is required')}
+          />
+        )}
+
         {isAdvancedStep && (
           <WizardMultiSelect
             title="Advanced settings (optional)"
@@ -268,7 +327,9 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
             initialValue=""
             onSubmit={wizard.setSubnets}
             onCancel={() => wizard.goBack()}
-            customValidation={value => (value.trim().length > 0 ? true : 'At least one subnet is required for VPC mode')}
+            customValidation={value =>
+              value.trim().length > 0 ? true : 'At least one subnet is required for VPC mode'
+            }
           />
         )}
 
@@ -279,7 +340,9 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
             initialValue=""
             onSubmit={wizard.setSecurityGroups}
             onCancel={() => wizard.goBack()}
-            customValidation={value => (value.trim().length > 0 ? true : 'At least one security group is required for VPC mode')}
+            customValidation={value =>
+              value.trim().length > 0 ? true : 'At least one security group is required for VPC mode'
+            }
           />
         )}
 

@@ -51,6 +51,8 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
         modelProvider: config.modelProvider,
         modelId: config.modelId,
         apiKeyArn: config.apiKeyArn,
+        containerUri: config.containerUri,
+        dockerfilePath: config.dockerfilePath,
         maxIterations: config.maxIterations,
         maxTokens: config.maxTokens,
         timeoutSeconds: config.timeoutSeconds,
@@ -67,7 +69,12 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
       }
 
       // Deploy harness to AWS
-      setFlow({ name: 'create-success', harnessName: config.name, loading: true, loadingMessage: 'Deploying harness to AWS...' });
+      setFlow({
+        name: 'create-success',
+        harnessName: config.name,
+        loading: true,
+        loadingMessage: 'Deploying harness to AWS...',
+      });
       try {
         const { handleDeploy } = await import('../../../commands/deploy/actions');
         const deployResult = await handleDeploy({ target: 'default', autoConfirm: true });
@@ -86,7 +93,13 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
   }, []);
 
   if (flow.name === 'create-wizard') {
-    return <AddHarnessScreen existingHarnessNames={existingNames} onComplete={handleCreateComplete} onExit={onBack} />;
+    return (
+      <AddHarnessScreen
+        existingHarnessNames={existingNames}
+        onComplete={config => void handleCreateComplete(config)}
+        onExit={onBack}
+      />
+    );
   }
 
   if (flow.name === 'create-success') {
