@@ -507,6 +507,18 @@ export function useCreateFlow(cwd: string): CreateFlowState {
                 securityGroups: addHarnessConfig.securityGroups,
                 idleTimeout: addHarnessConfig.idleTimeout,
                 maxLifetime: addHarnessConfig.maxLifetime,
+                authorizerType: addHarnessConfig.authorizerType,
+                jwtConfig: addHarnessConfig.jwtConfig
+                  ? {
+                      discoveryUrl: addHarnessConfig.jwtConfig.discoveryUrl,
+                      allowedAudience: addHarnessConfig.jwtConfig.allowedAudience,
+                      allowedClients: addHarnessConfig.jwtConfig.allowedClients,
+                      allowedScopes: addHarnessConfig.jwtConfig.allowedScopes,
+                      customClaims: addHarnessConfig.jwtConfig.customClaims,
+                      clientId: addHarnessConfig.jwtConfig.clientId,
+                      clientSecret: addHarnessConfig.jwtConfig.clientSecret,
+                    }
+                  : undefined,
                 configBaseDir,
               });
               if (!result.success) {

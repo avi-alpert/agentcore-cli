@@ -1,7 +1,8 @@
-import type { HarnessModelProvider } from '../../../../schema';
+import type { HarnessModelProvider, RuntimeAuthorizerType } from '../../../../schema';
 import { NetworkModeSchema } from '../../../../schema';
 import { HarnessNameSchema, HarnessTruncationStrategySchema } from '../../../../schema/schemas/primitives/harness';
 import { ARN_VALIDATION_MESSAGE, isValidArn } from '../../../commands/shared/arn-utils';
+import { computeManagedOAuthCredentialName } from '../../../primitives/credential-utils';
 import {
   ConfirmReview,
   Panel,
@@ -12,12 +13,14 @@ import {
   WizardSelect,
 } from '../../components';
 import type { SelectableItem } from '../../components';
+import { JwtConfigInput, useJwtConfigFlow } from '../../components/jwt-config';
 import { HELP_TEXT } from '../../constants';
 import { useListNavigation, useMultiSelectNavigation } from '../../hooks';
 import { generateUniqueName } from '../../utils';
 import type { AddHarnessConfig, AdvancedSetting, ContainerMode } from './types';
 import {
   ADVANCED_SETTING_OPTIONS,
+  AUTHORIZER_TYPE_OPTIONS,
   CONTAINER_MODE_OPTIONS,
   HARNESS_STEP_LABELS,
   MEMORY_OPTIONS,
@@ -37,6 +40,11 @@ interface AddHarnessScreenProps {
 
 export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: AddHarnessScreenProps) {
   const wizard = useAddHarnessWizard();
+
+  const jwtFlow = useJwtConfigFlow({
+    onComplete: jwtConfig => wizard.setJwtConfig(jwtConfig),
+    onBack: () => wizard.goBack(),
+  });
 
   const modelProviderItems: SelectableItem[] = useMemo(
     () => MODEL_PROVIDER_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
@@ -73,6 +81,11 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     []
   );
 
+  const authorizerTypeItems: SelectableItem[] = useMemo(
+    () => AUTHORIZER_TYPE_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
+    []
+  );
+
   const isNameStep = wizard.step === 'name';
   const isModelProviderStep = wizard.step === 'model-provider';
   const isApiKeyArnStep = wizard.step === 'api-key-arn';
@@ -85,6 +98,8 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
   const isMcpUrlStep = wizard.step === 'mcp-url';
   const isGatewayArnStep = wizard.step === 'gateway-arn';
   const isMemoryStep = wizard.step === 'memory';
+  const isAuthorizerTypeStep = wizard.step === 'authorizerType';
+  const isJwtConfigStep = wizard.step === 'jwtConfig';
   const isNetworkModeStep = wizard.step === 'network-mode';
   const isSubnetsStep = wizard.step === 'subnets';
   const isSecurityGroupsStep = wizard.step === 'security-groups';
@@ -136,6 +151,13 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     isActive: isMemoryStep,
   });
 
+  const authorizerTypeNav = useListNavigation({
+    items: authorizerTypeItems,
+    onSelect: item => wizard.setAuthorizerType(item.id as RuntimeAuthorizerType),
+    onExit: () => wizard.goBack(),
+    isActive: isAuthorizerTypeStep,
+  });
+
   const networkModeNav = useListNavigation({
     items: networkModeItems,
     onSelect: item => wizard.setNetworkMode(NetworkModeSchema.parse(item.id)),
@@ -157,10 +179,22 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     isActive: isConfirmStep,
   });
 
-  const helpText =
-    isAdvancedStep || isToolsSelectStep
+  const helpText = isJwtConfigStep
+    ? jwtFlow.subStep === 'constraintPicker'
+      ? HELP_TEXT.MULTI_SELECT
+      : jwtFlow.subStep === 'customClaims'
+        ? jwtFlow.claimsManagerMode === 'add' || jwtFlow.claimsManagerMode === 'edit'
+          ? '↑/↓ field · ←/→ cycle · Enter next/save · Esc cancel'
+          : 'Navigate · Enter select · Esc back'
+        : HELP_TEXT.TEXT_INPUT
+    : isAdvancedStep || isToolsSelectStep
       ? 'Space toggle · Enter confirm · Esc back'
-      : isModelProviderStep || isMemoryStep || isContainerStep || isNetworkModeStep || isTruncationStrategyStep
+      : isModelProviderStep ||
+          isMemoryStep ||
+          isContainerStep ||
+          isNetworkModeStep ||
+          isTruncationStrategyStep ||
+          isAuthorizerTypeStep
         ? HELP_TEXT.NAVIGATE_SELECT
         : isConfirmStep
           ? HELP_TEXT.CONFIRM_CANCEL
@@ -181,6 +215,36 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
 
     if (wizard.config.skipMemory !== undefined) {
       fields.push({ label: 'Memory', value: wizard.config.skipMemory ? 'Disabled' : 'Enabled' });
+    }
+
+    if (wizard.config.authorizerType) {
+      fields.push({
+        label: 'Auth Type',
+        value:
+          AUTHORIZER_TYPE_OPTIONS.find(o => o.id === wizard.config.authorizerType)?.title ??
+          wizard.config.authorizerType,
+      });
+    }
+    if (wizard.config.authorizerType === 'CUSTOM_JWT' && wizard.config.jwtConfig) {
+      fields.push({ label: 'Discovery URL', value: wizard.config.jwtConfig.discoveryUrl });
+      if (wizard.config.jwtConfig.allowedAudience?.length) {
+        fields.push({ label: 'Allowed Audience', value: wizard.config.jwtConfig.allowedAudience.join(', ') });
+      }
+      if (wizard.config.jwtConfig.allowedClients?.length) {
+        fields.push({ label: 'Allowed Clients', value: wizard.config.jwtConfig.allowedClients.join(', ') });
+      }
+      if (wizard.config.jwtConfig.allowedScopes?.length) {
+        fields.push({ label: 'Allowed Scopes', value: wizard.config.jwtConfig.allowedScopes.join(', ') });
+      }
+      if (wizard.config.jwtConfig.customClaims?.length) {
+        fields.push({
+          label: 'Custom Claims',
+          value: `${wizard.config.jwtConfig.customClaims.length} claim(s) configured`,
+        });
+      }
+      if (wizard.config.jwtConfig.clientId) {
+        fields.push({ label: 'Harness Credential', value: computeManagedOAuthCredentialName(wizard.config.name) });
+      }
     }
 
     if (wizard.config.containerUri) {
@@ -363,6 +427,39 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
             description="Persistent memory lets the harness remember context across sessions"
             items={memoryItems}
             selectedIndex={memoryNav.selectedIndex}
+          />
+        )}
+
+        {isAuthorizerTypeStep && (
+          <WizardSelect
+            title="Authorizer type"
+            description="How will clients authenticate to this harness?"
+            items={authorizerTypeItems}
+            selectedIndex={authorizerTypeNav.selectedIndex}
+          />
+        )}
+
+        {isJwtConfigStep && (
+          <JwtConfigInput
+            subStep={jwtFlow.subStep}
+            steps={jwtFlow.steps}
+            selectedConstraints={jwtFlow.selectedConstraints}
+            customClaims={jwtFlow.customClaims}
+            discoveryUrl={jwtFlow.discoveryUrl}
+            audience={jwtFlow.audience}
+            clients={jwtFlow.clients}
+            scopes={jwtFlow.scopes}
+            onDiscoveryUrl={jwtFlow.handlers.handleDiscoveryUrl}
+            onConstraintsPicked={jwtFlow.handlers.handleConstraintsPicked}
+            onAudience={jwtFlow.handlers.handleAudience}
+            onClients={jwtFlow.handlers.handleClients}
+            onScopes={jwtFlow.handlers.handleScopes}
+            onCustomClaimsDone={jwtFlow.handlers.handleCustomClaimsDone}
+            onClientId={jwtFlow.handlers.handleClientId}
+            onClientIdSkip={jwtFlow.handlers.handleClientIdSkip}
+            onClientSecret={jwtFlow.handlers.handleClientSecret}
+            onBack={jwtFlow.goBack}
+            onClaimsManagerModeChange={jwtFlow.handlers.handleClaimsManagerModeChange}
           />
         )}
 

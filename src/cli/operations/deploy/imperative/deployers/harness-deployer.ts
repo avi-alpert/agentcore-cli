@@ -163,6 +163,9 @@ export class HarnessDeployer implements ImperativeDeployer<HarnessDeployedStateM
               : undefined,
             environmentVariables: createOptions.environmentVariables,
             tags: createOptions.tags,
+            authorizerConfiguration: createOptions.authorizerConfiguration
+              ? { optionalValue: createOptions.authorizerConfiguration }
+              : { optionalValue: null },
           };
 
           const updateResult: UpdateHarnessResult = await updateHarness(updateOptions);

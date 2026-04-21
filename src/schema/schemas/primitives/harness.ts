@@ -1,6 +1,7 @@
 import { NetworkModeSchema } from '../../constants';
 import { NetworkConfigSchema } from '../agent-env';
 import { LifecycleConfigurationSchema } from '../agent-env';
+import { AuthorizerConfigSchema, RuntimeAuthorizerTypeSchema } from '../auth';
 import { uniqueBy } from '../zod-util';
 import { TagsSchema } from './tags';
 import { z } from 'zod';
@@ -234,6 +235,10 @@ export const HarnessSpecSchema = z
     lifecycleConfig: LifecycleConfigurationSchema.optional(),
     sessionStoragePath: z.string().min(1).optional(),
     environmentVariables: z.record(z.string(), z.string()).optional(),
+    /** Authorizer type for inbound requests. Defaults to AWS_IAM. */
+    authorizerType: RuntimeAuthorizerTypeSchema.optional(),
+    /** Authorizer configuration. Required when authorizerType is CUSTOM_JWT. */
+    authorizerConfiguration: AuthorizerConfigSchema.optional(),
     tags: TagsSchema.optional(),
   })
   .superRefine((data, ctx) => {
@@ -256,6 +261,20 @@ export const HarnessSpecSchema = z
         code: z.ZodIssueCode.custom,
         message: 'networkConfig is only allowed when networkMode is VPC',
         path: ['networkConfig'],
+      });
+    }
+    if (data.authorizerType === 'CUSTOM_JWT' && !data.authorizerConfiguration?.customJwtAuthorizer) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'authorizerConfiguration with customJwtAuthorizer is required when authorizerType is CUSTOM_JWT',
+        path: ['authorizerConfiguration'],
+      });
+    }
+    if (data.authorizerType !== 'CUSTOM_JWT' && data.authorizerConfiguration) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'authorizerConfiguration is only allowed when authorizerType is CUSTOM_JWT',
+        path: ['authorizerConfiguration'],
       });
     }
   });

@@ -68,6 +68,18 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
         mcpName: config.mcpName,
         mcpUrl: config.mcpUrl,
         gatewayArn: config.gatewayArn,
+        authorizerType: config.authorizerType,
+        jwtConfig: config.jwtConfig
+          ? {
+              discoveryUrl: config.jwtConfig.discoveryUrl,
+              allowedAudience: config.jwtConfig.allowedAudience,
+              allowedClients: config.jwtConfig.allowedClients,
+              allowedScopes: config.jwtConfig.allowedScopes,
+              customClaims: config.jwtConfig.customClaims,
+              clientId: config.jwtConfig.clientId,
+              clientSecret: config.jwtConfig.clientSecret,
+            }
+          : undefined,
       });
       if (!result.success) {
         setFlow({ name: 'error', message: result.error });

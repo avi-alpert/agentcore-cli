@@ -112,7 +112,7 @@ export class AgentCoreApiClient {
   }
 }
 
-function resolveEndpoint(region: string, plane: ApiPlane): string {
+export function resolveEndpoint(region: string, plane: ApiPlane): string {
   const stage = process.env.AGENTCORE_STAGE?.toLowerCase();
 
   if (plane === 'control') {

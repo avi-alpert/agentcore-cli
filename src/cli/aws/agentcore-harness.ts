@@ -8,7 +8,7 @@
  * Built on AgentCoreApiClient (shared SigV4 HTTP client).
  * Migrate to @aws-sdk/client-bedrock-agentcore-control when Harness commands land in the SDK.
  */
-import { AgentCoreApiClient, AgentCoreApiError } from './api-client';
+import { AgentCoreApiClient, AgentCoreApiError, resolveEndpoint } from './api-client';
 import { randomUUID } from 'node:crypto';
 
 // ============================================================================
@@ -313,6 +313,8 @@ export interface InvokeHarnessOptions {
   maxTokens?: number;
   timeoutSeconds?: number;
   actorId?: string;
+  /** Bearer token for CUSTOM_JWT auth (bypasses SigV4) */
+  bearerToken?: string;
 }
 
 // ── Stream event types ──────────────────────────────────────────────────────
@@ -377,8 +379,7 @@ export type HarnessStreamEvent =
   | { type: 'error'; errorType: string; message: string };
 
 export async function* invokeHarness(options: InvokeHarnessOptions): AsyncGenerator<HarnessStreamEvent> {
-  const { region, harnessArn, runtimeSessionId, messages, ...overrides } = options;
-  const client = new AgentCoreApiClient({ region, plane: 'data' });
+  const { region, harnessArn, runtimeSessionId, messages, bearerToken, ...overrides } = options;
 
   const body: Record<string, unknown> = { messages };
   if (overrides.model) body.model = overrides.model;
@@ -391,13 +392,19 @@ export async function* invokeHarness(options: InvokeHarnessOptions): AsyncGenera
   if (overrides.timeoutSeconds != null) body.timeoutSeconds = overrides.timeoutSeconds;
   if (overrides.actorId) body.actorId = overrides.actorId;
 
-  const response = await client.requestRaw({
-    method: 'POST',
-    path: '/harnesses/invoke',
-    query: { harnessArn },
-    headers: { 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': runtimeSessionId },
-    body,
-  });
+  let response: Response;
+  if (bearerToken) {
+    response = await invokeHarnessWithBearerToken(region, harnessArn, runtimeSessionId, body, bearerToken);
+  } else {
+    const client = new AgentCoreApiClient({ region, plane: 'data' });
+    response = await client.requestRaw({
+      method: 'POST',
+      path: '/harnesses/invoke',
+      query: { harnessArn },
+      headers: { 'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': runtimeSessionId },
+      body,
+    });
+  }
 
   if (!response.ok) {
     const errorBody = await response.text();
@@ -408,6 +415,28 @@ export async function* invokeHarness(options: InvokeHarnessOptions): AsyncGenera
   if (!response.body) return;
 
   yield* parseEventStream(response.body);
+}
+
+async function invokeHarnessWithBearerToken(
+  region: string,
+  harnessArn: string,
+  runtimeSessionId: string,
+  body: Record<string, unknown>,
+  bearerToken: string
+): Promise<Response> {
+  const endpoint = resolveEndpoint(region, 'data');
+  const url = new URL('/harnesses/invoke', endpoint);
+  url.searchParams.set('harnessArn', harnessArn);
+
+  return fetch(url.toString(), {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${bearerToken}`,
+      'Content-Type': 'application/json',
+      'X-Amzn-Bedrock-AgentCore-Runtime-Session-Id': runtimeSessionId,
+    },
+    body: JSON.stringify(body),
+  });
 }
 
 async function* parseEventStream(body: ReadableStream<Uint8Array>): AsyncGenerator<HarnessStreamEvent> {

@@ -27,6 +27,7 @@ import type {
   AddCredentialOptions,
   AddGatewayOptions,
   AddGatewayTargetOptions,
+  AddHarnessCliOptions,
   AddMemoryOptions,
 } from './types';
 import { existsSync, readFileSync } from 'fs';
@@ -787,6 +788,27 @@ export function validateAddCredentialOptions(options: AddCredentialOptions): Val
 
   if (!options.apiKey) {
     return { valid: false, error: '--api-key is required' };
+  }
+
+  return { valid: true };
+}
+
+// Harness validation
+export function validateAddHarnessOptions(options: AddHarnessCliOptions): ValidationResult {
+  if (options.authorizerType) {
+    const authResult = RuntimeAuthorizerTypeSchema.safeParse(options.authorizerType);
+    if (!authResult.success) {
+      return { valid: false, error: 'Invalid authorizer type. Use AWS_IAM or CUSTOM_JWT' };
+    }
+
+    if (options.authorizerType === 'CUSTOM_JWT') {
+      const jwtResult = validateJwtAuthorizerOptions(options);
+      if (!jwtResult.valid) return jwtResult;
+    }
+  }
+
+  if (options.clientId && options.authorizerType !== 'CUSTOM_JWT') {
+    return { valid: false, error: 'OAuth client credentials are only valid with CUSTOM_JWT authorizer' };
   }
 
   return { valid: true };

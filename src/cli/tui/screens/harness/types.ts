@@ -1,4 +1,5 @@
-import type { HarnessModelProvider, NetworkMode } from '../../../../schema';
+import type { HarnessModelProvider, NetworkMode, RuntimeAuthorizerType } from '../../../../schema';
+import type { JwtConfig } from '../../components/jwt-config';
 
 export type ContainerMode = 'none' | 'uri' | 'dockerfile';
 
@@ -15,6 +16,8 @@ export type AddHarnessStep =
   | 'mcp-url'
   | 'gateway-arn'
   | 'memory'
+  | 'authorizerType'
+  | 'jwtConfig'
   | 'network-mode'
   | 'subnets'
   | 'security-groups'
@@ -46,6 +49,8 @@ export interface AddHarnessConfig {
   idleTimeout?: number;
   maxLifetime?: number;
   sessionStoragePath?: string;
+  authorizerType?: RuntimeAuthorizerType;
+  jwtConfig?: JwtConfig;
   selectedTools?: string[];
   mcpName?: string;
   mcpUrl?: string;
@@ -65,6 +70,8 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   'mcp-url': 'MCP URL',
   'gateway-arn': 'Gateway ARN',
   memory: 'Memory',
+  authorizerType: 'Auth type',
+  jwtConfig: 'JWT config',
   'network-mode': 'Network mode',
   subnets: 'Subnets',
   'security-groups': 'Security groups',
@@ -98,6 +105,7 @@ export const TRUNCATION_STRATEGY_OPTIONS = [
 export const ADVANCED_SETTING_OPTIONS = [
   { id: 'memory', title: 'Memory', description: 'Retain context across sessions' },
   { id: 'tools', title: 'Tools', description: 'Add browser, code interpreter, MCP, or gateway tools' },
+  { id: 'auth', title: 'Authentication', description: 'Inbound auth: AWS_IAM or Custom JWT' },
   { id: 'network', title: 'Network', description: 'Deploy inside a VPC with custom subnets and security groups' },
   { id: 'lifecycle', title: 'Lifecycle', description: 'Set idle timeout and max session lifetime' },
   { id: 'execution', title: 'Execution limits', description: 'Cap iterations, tokens, and per-turn timeout' },
@@ -132,4 +140,9 @@ export const TOOL_SELECT_OPTIONS = [
 export const NETWORK_MODE_OPTIONS = [
   { id: 'PUBLIC' as const, title: 'Public', description: 'Internet-facing' },
   { id: 'VPC' as const, title: 'VPC', description: 'Deploy within a VPC' },
+] as const;
+
+export const AUTHORIZER_TYPE_OPTIONS = [
+  { id: 'AWS_IAM' as const, title: 'AWS IAM', description: 'Use AWS IAM authentication (default)' },
+  { id: 'CUSTOM_JWT' as const, title: 'Custom JWT', description: 'Use a custom JWT authorizer (OIDC)' },
 ] as const;

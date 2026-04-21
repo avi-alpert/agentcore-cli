@@ -12,7 +12,12 @@ import {
 import { invokeHarness } from '../../aws/agentcore-harness';
 import { InvokeLogger } from '../../logging';
 import { formatMcpToolList } from '../../operations/dev/utils';
-import { canFetchRuntimeToken, fetchRuntimeToken } from '../../operations/fetch-access';
+import {
+  canFetchHarnessToken,
+  canFetchRuntimeToken,
+  fetchHarnessToken,
+  fetchRuntimeToken,
+} from '../../operations/fetch-access';
 import type { InvokeOptions, InvokeResult } from './types';
 import { randomUUID } from 'node:crypto';
 
@@ -461,6 +466,36 @@ async function handleHarnessInvoke(
     };
   }
 
+  // Read harness spec for auth config
+  const configIO = new ConfigIO();
+  let harnessSpec;
+  try {
+    harnessSpec = await configIO.readHarnessSpec(harnessName);
+  } catch {
+    // If we can't read the spec, continue without auto-fetch
+  }
+
+  // Auto-fetch bearer token for CUSTOM_JWT harnesses when not provided
+  if (harnessSpec?.authorizerType === 'CUSTOM_JWT' && !options.bearerToken) {
+    const canFetch = await canFetchHarnessToken(harnessName);
+    if (canFetch) {
+      try {
+        const tokenResult = await fetchHarnessToken(harnessName, { deployTarget: selectedTargetName });
+        options = { ...options, bearerToken: tokenResult.token };
+      } catch (err) {
+        return {
+          success: false,
+          error: `CUSTOM_JWT harness requires a bearer token. Auto-fetch failed: ${err instanceof Error ? err.message : String(err)}\nProvide one manually with --bearer-token.`,
+        };
+      }
+    } else {
+      return {
+        success: false,
+        error: `Harness '${harnessName}' is configured for CUSTOM_JWT but no bearer token is available.\nEither provide --bearer-token or re-add the harness with --client-id and --client-secret to enable auto-fetch.`,
+      };
+    }
+  }
+
   // Exec mode: run shell command on harness VM via InvokeAgentRuntimeCommand
   if (options.exec) {
     const command = options.prompt;
@@ -597,6 +632,7 @@ async function handleHarnessInvoke(
         harnessArn: harnessState.harnessArn,
         runtimeSessionId: sessionId,
         messages,
+        bearerToken: options.bearerToken,
         ...baseOpts,
       });
 
@@ -755,6 +791,7 @@ async function handleHarnessInvoke(
             ],
           },
         ],
+        bearerToken: options.bearerToken,
         ...baseOpts,
       });
 

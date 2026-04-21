@@ -163,18 +163,20 @@ export function InvokeScreen({
   const mcpFetchTriggeredRef = useRef(false);
 
   // Compute auth type early so hooks can reference it
-  const currentAgent = config?.runtimes[selectedAgent];
-  const isCustomJwt = currentAgent?.authorizerType === 'CUSTOM_JWT';
+  const totalInvokables = (config?.runtimes.length ?? 0) + (config?.harnesses.length ?? 0);
+  const runtimeCount = config?.runtimes.length ?? 0;
+  const currentAgent = selectedAgent < runtimeCount ? config?.runtimes[selectedAgent] : undefined;
+  const currentHarness = selectedAgent >= runtimeCount ? config?.harnesses[selectedAgent - runtimeCount] : undefined;
+  const isCustomJwt = (currentAgent?.authorizerType ?? currentHarness?.authorizerType) === 'CUSTOM_JWT';
 
   // Handle initial prompt - skip agent selection if only one invokable
-  const totalInvokables = (config?.runtimes.length ?? 0) + (config?.harnesses.length ?? 0);
   useEffect(() => {
     if (config && phase === 'ready') {
       if (totalInvokables === 1 && mode === 'select-agent') {
         const agent = config.runtimes[0];
-        const isHarness = config.runtimes.length === 0;
-        const needsTokenScreen =
-          !isHarness && agent?.authorizerType === 'CUSTOM_JWT' && !bearerToken && !initialBearerToken;
+        const harness = config.runtimes.length === 0 ? config.harnesses[0] : undefined;
+        const authType = agent?.authorizerType ?? harness?.authorizerType;
+        const needsTokenScreen = authType === 'CUSTOM_JWT' && !bearerToken && !initialBearerToken;
         queueMicrotask(() => {
           setMode(needsTokenScreen ? 'token-input' : 'input');
         });
@@ -184,6 +186,13 @@ export function InvokeScreen({
       }
     }
   }, [config, phase, initialPrompt, messages.length, invoke, mode, bearerToken, initialBearerToken, totalInvokables]);
+
+  // When entering via initialHarnessName (dev mode), redirect to token-input once config loads
+  useEffect(() => {
+    if (initialHarnessName && config && phase === 'ready' && mode === 'input' && isCustomJwt && !bearerToken && !initialBearerToken) {
+      queueMicrotask(() => setMode('token-input'));
+    }
+  }, [initialHarnessName, config, phase, mode, isCustomJwt, bearerToken, initialBearerToken]);
 
   // Auto-exit when prompt was provided upfront and response completes
   useEffect(() => {
@@ -279,13 +288,14 @@ export function InvokeScreen({
         if (key.upArrow) selectAgent((selectedAgent - 1 + totalInvokables) % totalInvokables);
         if (key.downArrow) selectAgent((selectedAgent + 1) % totalInvokables);
         if (key.return) {
-          if (selectedAgent >= config.runtimes.length) {
-            setMode('input');
-          } else {
-            const chosen = config.runtimes[selectedAgent];
-            const needsTokenScreen = chosen?.authorizerType === 'CUSTOM_JWT' && !bearerToken && !initialBearerToken;
-            setMode(needsTokenScreen ? 'token-input' : 'input');
-          }
+          const chosen = config.runtimes[selectedAgent];
+          const chosenHarness =
+            selectedAgent >= config.runtimes.length
+              ? config.harnesses[selectedAgent - config.runtimes.length]
+              : undefined;
+          const authType = chosen?.authorizerType ?? chosenHarness?.authorizerType;
+          const needsTokenScreen = authType === 'CUSTOM_JWT' && !bearerToken && !initialBearerToken;
+          setMode(needsTokenScreen ? 'token-input' : 'input');
         }
         return;
       }

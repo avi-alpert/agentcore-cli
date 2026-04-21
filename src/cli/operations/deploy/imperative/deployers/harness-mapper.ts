@@ -116,6 +116,21 @@ export async function mapHarnessSpecToCreateOptions(options: MapHarnessOptions):
     result.tags = harnessSpec.tags;
   }
 
+  // Authorizer configuration — authorizerType is inferred by the API from the
+  // presence of authorizerConfiguration, so only the configuration is forwarded.
+  if (harnessSpec.authorizerConfiguration?.customJwtAuthorizer) {
+    const jwt = harnessSpec.authorizerConfiguration.customJwtAuthorizer;
+    result.authorizerConfiguration = {
+      customJWTAuthorizer: {
+        discoveryUrl: jwt.discoveryUrl,
+        ...(jwt.allowedAudience && { allowedAudience: jwt.allowedAudience }),
+        ...(jwt.allowedClients && { allowedClients: jwt.allowedClients }),
+        ...(jwt.allowedScopes && { allowedScopes: jwt.allowedScopes }),
+        ...(jwt.customClaims && { customClaims: jwt.customClaims }),
+      },
+    };
+  }
+
   return result;
 }
 

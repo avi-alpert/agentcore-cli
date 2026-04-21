@@ -1,16 +1,21 @@
 import { APP_DIR, ConfigIO, findConfigRoot } from '../../lib';
-import type { HarnessModelProvider, HarnessSpec, MemoryStrategy, MemoryStrategyType, NetworkMode } from '../../schema';
-import {
-  DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
-  DEFAULT_STRATEGY_NAMESPACES,
-  HarnessSpecSchema,
+import type {
+  HarnessModelProvider,
+  HarnessSpec,
+  MemoryStrategy,
+  MemoryStrategyType,
+  NetworkMode,
+  RuntimeAuthorizerType,
 } from '../../schema';
+import { DEFAULT_EPISODIC_REFLECTION_NAMESPACES, DEFAULT_STRATEGY_NAMESPACES, HarnessSpecSchema } from '../../schema';
 import { deleteHarness } from '../aws/agentcore-harness';
 import { getErrorMessage } from '../errors';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
 import { getTemplatePath } from '../templates/templateRoot';
 import { DEFAULT_MEMORY_EXPIRY_DAYS } from '../tui/screens/generate/defaults';
 import { BasePrimitive } from './BasePrimitive';
+import { buildAuthorizerConfigFromJwtConfig, createManagedOAuthCredential } from './auth-utils';
+import type { JwtConfigOptions } from './auth-utils';
 import type { AddResult, AddScreenComponent, RemovableResource } from './types';
 import type { Command } from '@commander-js/extra-typings';
 import { access, copyFile, mkdir, readFile, rm, writeFile } from 'fs/promises';
@@ -40,6 +45,8 @@ export interface AddHarnessOptions {
   mcpName?: string;
   mcpUrl?: string;
   gatewayArn?: string;
+  authorizerType?: RuntimeAuthorizerType;
+  jwtConfig?: JwtConfigOptions;
   configBaseDir?: string;
 }
 
@@ -134,6 +141,10 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           }),
         ...(this.buildLifecycleConfig(options) && { lifecycleConfig: this.buildLifecycleConfig(options) }),
         ...(options.sessionStoragePath && { sessionStoragePath: options.sessionStoragePath }),
+        ...(options.authorizerType && { authorizerType: options.authorizerType }),
+        ...(options.authorizerType === 'CUSTOM_JWT' && options.jwtConfig
+          ? { authorizerConfiguration: buildAuthorizerConfigFromJwtConfig(options.jwtConfig) }
+          : {}),
       };
 
       await configIO.writeHarnessSpec(options.name, harnessSpec);
@@ -177,6 +188,15 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       ];
 
       await this.writeProjectSpec(project, configIO);
+
+      if (options.jwtConfig?.clientId && options.jwtConfig?.clientSecret) {
+        await createManagedOAuthCredential(
+          options.name,
+          options.jwtConfig,
+          spec => this.writeProjectSpec(spec, configIO),
+          () => this.readProjectSpec(configIO)
+        );
+      }
 
       return { success: true, harnessName: options.name };
     } catch (err) {
@@ -295,6 +315,14 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       .option('--max-lifetime <seconds>', 'Max lifetime in seconds', parseInt)
       .option('--session-storage <path>', 'Mount path for persistent session storage (e.g., /mnt/data/)')
       .option('--with-invoke-script', 'Generate a standalone Python invoke script')
+      .option('--authorizer-type <type>', 'Authorizer type: AWS_IAM or CUSTOM_JWT')
+      .option('--discovery-url <url>', 'OIDC discovery URL (for CUSTOM_JWT)')
+      .option('--allowed-audience <audiences>', 'Comma-separated allowed audiences (for CUSTOM_JWT)')
+      .option('--allowed-clients <clients>', 'Comma-separated allowed client IDs (for CUSTOM_JWT)')
+      .option('--allowed-scopes <scopes>', 'Comma-separated allowed scopes (for CUSTOM_JWT)')
+      .option('--custom-claims <json>', 'Custom claims JSON array (for CUSTOM_JWT)')
+      .option('--client-id <id>', 'OAuth client ID (for CUSTOM_JWT)')
+      .option('--client-secret <secret>', 'OAuth client secret (for CUSTOM_JWT)')
       .option('--json', 'Output as JSON')
       .action(
         async (cliOptions: {
@@ -315,11 +343,34 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           maxLifetime?: number;
           sessionStorage?: string;
           withInvokeScript?: boolean;
+          authorizerType?: string;
+          discoveryUrl?: string;
+          allowedAudience?: string;
+          allowedClients?: string;
+          allowedScopes?: string;
+          customClaims?: string;
+          clientId?: string;
+          clientSecret?: string;
           json?: boolean;
         }) => {
           try {
             if (!findConfigRoot()) {
               console.error('No agentcore project found. Run `agentcore create` first.');
+              process.exit(1);
+            }
+
+            // Validate auth options
+            const { validateAddHarnessOptions } = await import('../commands/add/validate');
+            const authValidation = validateAddHarnessOptions({
+              ...cliOptions,
+              authorizerType: cliOptions.authorizerType as RuntimeAuthorizerType | undefined,
+            });
+            if (!authValidation.valid) {
+              if (cliOptions.json) {
+                console.log(JSON.stringify({ success: false, error: authValidation.error }));
+              } else {
+                console.error(authValidation.error);
+              }
               process.exit(1);
             }
 
@@ -359,6 +410,21 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
                 maxLifetime: cliOptions.maxLifetime,
                 sessionStoragePath: cliOptions.sessionStorage,
                 withInvokeScript: cliOptions.withInvokeScript,
+                authorizerType: cliOptions.authorizerType as RuntimeAuthorizerType | undefined,
+                jwtConfig:
+                  cliOptions.authorizerType === 'CUSTOM_JWT' && cliOptions.discoveryUrl
+                    ? {
+                        discoveryUrl: cliOptions.discoveryUrl,
+                        allowedAudience: cliOptions.allowedAudience?.split(',').map(s => s.trim()),
+                        allowedClients: cliOptions.allowedClients?.split(',').map(s => s.trim()),
+                        allowedScopes: cliOptions.allowedScopes?.split(',').map(s => s.trim()),
+                        customClaims: cliOptions.customClaims
+                          ? (JSON.parse(cliOptions.customClaims) as JwtConfigOptions['customClaims'])
+                          : undefined,
+                        clientId: cliOptions.clientId,
+                        clientSecret: cliOptions.clientSecret,
+                      }
+                    : undefined,
               });
 
               if (!result.success) {

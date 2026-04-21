@@ -1,4 +1,5 @@
-import type { HarnessModelProvider, NetworkMode } from '../../../../schema';
+import type { HarnessModelProvider, NetworkMode, RuntimeAuthorizerType } from '../../../../schema';
+import type { JwtConfig } from '../../components/jwt-config';
 import type { AddHarnessConfig, AddHarnessStep, AdvancedSetting, ContainerMode } from './types';
 import { DEFAULT_MODEL_IDS } from './types';
 import { useCallback, useMemo, useState } from 'react';
@@ -6,6 +7,7 @@ import { useCallback, useMemo, useState } from 'react';
 const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
   'tools',
   'memory',
+  'auth',
   'network',
   'lifecycle',
   'execution',
@@ -16,6 +18,7 @@ const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
 const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
   tools: 'tools-select',
   memory: 'memory',
+  auth: 'authorizerType',
   network: 'network-mode',
   lifecycle: 'idle-timeout',
   execution: 'max-iterations',
@@ -82,6 +85,13 @@ export function useAddHarnessWizard() {
       steps.push('memory');
     }
 
+    if (advancedSettings.includes('auth')) {
+      steps.push('authorizerType');
+      if (config.authorizerType === 'CUSTOM_JWT') {
+        steps.push('jwtConfig');
+      }
+    }
+
     if (advancedSettings.includes('network')) {
       steps.push('network-mode');
       if (config.networkMode === 'VPC') {
@@ -108,7 +118,14 @@ export function useAddHarnessWizard() {
     steps.push('confirm');
 
     return steps;
-  }, [config.modelProvider, config.containerMode, config.networkMode, config.selectedTools, advancedSettings]);
+  }, [
+    config.modelProvider,
+    config.containerMode,
+    config.authorizerType,
+    config.networkMode,
+    config.selectedTools,
+    advancedSettings,
+  ]);
 
   const currentIndex = allSteps.indexOf(step);
 
@@ -238,6 +255,28 @@ export function useAddHarnessWizard() {
     (enabled: boolean) => {
       setConfig(c => ({ ...c, skipMemory: !enabled }));
       const next = getNextAdvancedStep(advancedSettings, 'memory');
+      setStep(next ?? 'confirm');
+    },
+    [advancedSettings]
+  );
+
+  const setAuthorizerType = useCallback(
+    (authorizerType: RuntimeAuthorizerType) => {
+      setConfig(c => ({ ...c, authorizerType, jwtConfig: undefined }));
+      if (authorizerType === 'CUSTOM_JWT') {
+        setStep('jwtConfig');
+      } else {
+        const next = getNextAdvancedStep(advancedSettings, 'auth');
+        setStep(next ?? 'confirm');
+      }
+    },
+    [advancedSettings]
+  );
+
+  const setJwtConfig = useCallback(
+    (jwtConfig: JwtConfig) => {
+      setConfig(c => ({ ...c, jwtConfig }));
+      const next = getNextAdvancedStep(advancedSettings, 'auth');
       setStep(next ?? 'confirm');
     },
     [advancedSettings]
@@ -375,6 +414,8 @@ export function useAddHarnessWizard() {
     setMcpUrl,
     setGatewayArn,
     setMemoryEnabled,
+    setAuthorizerType,
+    setJwtConfig,
     setNetworkMode,
     setSubnets,
     setSecurityGroups,

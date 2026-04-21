@@ -22,7 +22,12 @@ import { invokeHarness } from '../../../aws/agentcore-harness';
 import { getErrorMessage } from '../../../errors';
 import { InvokeLogger } from '../../../logging';
 import { formatMcpToolList } from '../../../operations/dev/utils';
-import { canFetchRuntimeToken, fetchRuntimeToken } from '../../../operations/fetch-access';
+import {
+  canFetchHarnessToken,
+  canFetchRuntimeToken,
+  fetchHarnessToken,
+  fetchRuntimeToken,
+} from '../../../operations/fetch-access';
 import { generateSessionId } from '../../../operations/session';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -39,6 +44,7 @@ export interface InvokeConfig {
     name: string;
     state: HarnessDeployedState;
     inlineFunctionTools: Set<string>;
+    authorizerType?: RuntimeAuthorizerType;
   }[];
   target: AwsDeploymentTarget;
   targetName: string;
@@ -164,13 +170,15 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
           const state = targetState?.resources?.harnesses?.[harness.name];
           if (!state) continue;
           let inlineFunctionTools = new Set<string>();
+          let authorizerType: RuntimeAuthorizerType | undefined;
           try {
             const spec = await configIO.readHarnessSpec(harness.name);
             inlineFunctionTools = new Set(spec.tools.filter(t => t.type === 'inline_function').map(t => t.name));
+            authorizerType = spec.authorizerType;
           } catch {
             // fall back to stream-end detection
           }
-          harnesses.push({ name: harness.name, state, inlineFunctionTools });
+          harnesses.push({ name: harness.name, state, inlineFunctionTools, authorizerType });
         }
 
         if (runtimes.length === 0 && harnesses.length === 0) {
@@ -243,15 +251,22 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
 
   const fetchBearerToken = useCallback(async () => {
     if (!config) return;
-    const agent = config.runtimes[selectedAgent];
-    if (agent?.authorizerType !== 'CUSTOM_JWT') return;
 
-    // Check if credentials are set up before attempting fetch
-    const canFetch = await canFetchRuntimeToken(agent.name);
+    const isHarnessSelected = selectedAgent >= config.runtimes.length;
+    const agent = isHarnessSelected ? undefined : config.runtimes[selectedAgent];
+    const harness = isHarnessSelected ? config.harnesses[selectedAgent - config.runtimes.length] : undefined;
+    const selectedAuthType = agent?.authorizerType ?? harness?.authorizerType;
+    const selectedName = agent?.name ?? harness?.name;
+
+    if (selectedAuthType !== 'CUSTOM_JWT' || !selectedName) return;
+
+    const canFetch = isHarnessSelected
+      ? await canFetchHarnessToken(selectedName)
+      : await canFetchRuntimeToken(selectedName);
     if (!canFetch) {
       setTokenFetchState('error');
       setTokenFetchError(
-        'No OAuth credentials configured for auto-fetch. Press T to enter a bearer token manually, or re-add the agent with --client-id and --client-secret.'
+        'No OAuth credentials configured for auto-fetch. Press T to enter a bearer token manually, or re-add with --client-id and --client-secret.'
       );
       return;
     }
@@ -259,7 +274,9 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
     setTokenFetchState('fetching');
     setTokenFetchError(null);
     try {
-      const result = await fetchRuntimeToken(agent.name, { deployTarget: config.targetName });
+      const result = isHarnessSelected
+        ? await fetchHarnessToken(selectedName, { deployTarget: config.targetName })
+        : await fetchRuntimeToken(selectedName, { deployTarget: config.targetName });
       setBearerToken(result.token);
       setTokenExpiresIn(result.expiresIn);
       setTokenFetchState('fetched');
@@ -293,6 +310,7 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
           harnessArn,
           runtimeSessionId,
           messages: harnessMessages,
+          bearerToken: bearerToken || undefined,
         });
 
         for await (const event of stream) {
@@ -445,7 +463,7 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
         setPhase('ready');
       }
     },
-    []
+    [bearerToken]
   );
 
   const invoke = useCallback(

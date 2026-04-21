@@ -1,3 +1,4 @@
+import { setEnvVar } from '../../../lib';
 import type { AgentCoreProjectSpec, NetworkMode } from '../../../schema';
 import { DEFAULT_EPISODIC_REFLECTION_NAMESPACES, DEFAULT_STRATEGY_NAMESPACES } from '../../../schema';
 import { HarnessPrimitive } from '../HarnessPrimitive';
@@ -20,6 +21,7 @@ vi.mock('../../../lib', () => ({
     hasProject = vi.fn().mockReturnValue(true);
   },
   findConfigRoot: vi.fn().mockReturnValue('/tmp/test/agentcore'),
+  setEnvVar: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('fs/promises', () => ({
@@ -103,12 +105,12 @@ describe('HarnessPrimitive', () => {
               name: 'testHarnessMemory',
               eventExpiryDuration: 30,
               strategies: [
-                { type: 'SEMANTIC', namespaces: DEFAULT_STRATEGY_NAMESPACES['SEMANTIC'] },
-                { type: 'USER_PREFERENCE', namespaces: DEFAULT_STRATEGY_NAMESPACES['USER_PREFERENCE'] },
-                { type: 'SUMMARIZATION', namespaces: DEFAULT_STRATEGY_NAMESPACES['SUMMARIZATION'] },
+                { type: 'SEMANTIC', namespaces: DEFAULT_STRATEGY_NAMESPACES.SEMANTIC },
+                { type: 'USER_PREFERENCE', namespaces: DEFAULT_STRATEGY_NAMESPACES.USER_PREFERENCE },
+                { type: 'SUMMARIZATION', namespaces: DEFAULT_STRATEGY_NAMESPACES.SUMMARIZATION },
                 {
                   type: 'EPISODIC',
-                  namespaces: DEFAULT_STRATEGY_NAMESPACES['EPISODIC'],
+                  namespaces: DEFAULT_STRATEGY_NAMESPACES.EPISODIC,
                   reflectionNamespaces: DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
                 },
               ],
@@ -364,6 +366,109 @@ describe('HarnessPrimitive', () => {
 
       expect(result.success).toBe(false);
       expect(!result.success && result.error).toContain('Dockerfile not found at');
+    });
+
+    it('includes authorizerType AWS_IAM in harness spec', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        authorizerType: 'AWS_IAM',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          authorizerType: 'AWS_IAM',
+        })
+      );
+      // AWS_IAM should NOT have authorizerConfiguration
+      const harnessSpec = mockWriteHarnessSpec.mock.calls[0]![1];
+      expect(harnessSpec).not.toHaveProperty('authorizerConfiguration');
+    });
+
+    it('includes CUSTOM_JWT auth config in harness spec', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        authorizerType: 'CUSTOM_JWT',
+        jwtConfig: {
+          discoveryUrl: 'https://example.com/.well-known/openid-configuration',
+          allowedAudience: ['aud1'],
+        },
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          authorizerType: 'CUSTOM_JWT',
+          authorizerConfiguration: {
+            customJwtAuthorizer: {
+              discoveryUrl: 'https://example.com/.well-known/openid-configuration',
+              allowedAudience: ['aud1'],
+            },
+          },
+        })
+      );
+    });
+
+    it('creates managed OAuth credential when clientId and clientSecret provided', async () => {
+      // First call returns the base project (for add),
+      // second call returns updated project with the harness (for createManagedOAuthCredential)
+      const projectAfterHarness = {
+        ...JSON.parse(JSON.stringify(baseProject)),
+        harnesses: [{ name: 'testHarness', path: 'app/testHarness' }],
+      };
+      mockReadProjectSpec
+        .mockResolvedValueOnce(JSON.parse(JSON.stringify(baseProject)))
+        .mockResolvedValueOnce(projectAfterHarness);
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        authorizerType: 'CUSTOM_JWT',
+        jwtConfig: {
+          discoveryUrl: 'https://example.com/.well-known/openid-configuration',
+          allowedAudience: ['aud1'],
+          clientId: 'my-client-id',
+          clientSecret: 'my-client-secret',
+        },
+      });
+
+      expect(result.success).toBe(true);
+
+      // writeProjectSpec called twice: once for harness, once for credential
+      expect(mockWriteProjectSpec).toHaveBeenCalledTimes(2);
+
+      // Second call should include the managed OAuth credential
+      const secondCallSpec = mockWriteProjectSpec.mock.calls[1]![0] as AgentCoreProjectSpec;
+      expect(secondCallSpec.credentials).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            authorizerType: 'OAuthCredentialProvider',
+            name: 'testHarness-oauth',
+            discoveryUrl: 'https://example.com/.well-known/openid-configuration',
+            vendor: 'CustomOauth2',
+            managed: true,
+            usage: 'inbound',
+          }),
+        ])
+      );
+
+      // setEnvVar should have been called for client ID and secret
+      expect(setEnvVar).toHaveBeenCalledWith('AGENTCORE_CREDENTIAL_TESTHARNESS_OAUTH_CLIENT_ID', 'my-client-id');
+      expect(setEnvVar).toHaveBeenCalledWith(
+        'AGENTCORE_CREDENTIAL_TESTHARNESS_OAUTH_CLIENT_SECRET',
+        'my-client-secret'
+      );
     });
   });
 
