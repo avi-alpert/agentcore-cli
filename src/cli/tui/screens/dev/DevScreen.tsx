@@ -1,11 +1,25 @@
 import type { AgentEnvSpec } from '../../../../schema';
 import { getDevSupportedAgents, getEndpointUrl, loadProjectConfig } from '../../../operations/dev';
-import { GradientText, LogLink, Panel, Screen, SelectList, TextInput } from '../../components';
+import {
+  AwsTargetConfigUI,
+  DeployStatus,
+  GradientText,
+  LogLink,
+  Panel,
+  Screen,
+  SelectList,
+  StepProgress,
+  TextInput,
+  getAwsConfigHelpText,
+} from '../../components';
+import { useAwsTargetConfig } from '../../hooks';
+import { useDevDeploy } from '../../hooks/useDevDeploy';
 import { type ConversationMessage, useDevServer } from '../../hooks/useDevServer';
+import { InvokeScreen } from '../invoke/InvokeScreen';
 import { Box, Text, useInput, useStdout } from 'ink';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-type Mode = 'select-agent' | 'chat' | 'input';
+type Mode = 'deploying' | 'select-agent' | 'chat' | 'input' | 'harness';
 
 interface DevScreenProps {
   onBack: () => void;
@@ -15,6 +29,10 @@ interface DevScreenProps {
   agentName?: string;
   /** Custom headers to forward to the agent on every invocation */
   headers?: Record<string, string>;
+  /** Skip automatic resource deployment */
+  skipDeploy?: boolean;
+  /** Called when the user selects a code-based agent that should open in Agent Inspector */
+  onLaunchBrowser?: (agentName: string) => void;
 }
 
 interface ColoredLine {
@@ -120,7 +138,8 @@ function wrapColoredLines(lines: ColoredLine[], maxWidth: number): ColoredLine[]
 const MAX_VISIBLE_TOOLS = 5;
 
 export function DevScreen(props: DevScreenProps) {
-  const [mode, setMode] = useState<Mode>('select-agent');
+  const { onLaunchBrowser } = props;
+  const [mode, setMode] = useState<Mode>(props.skipDeploy ? 'select-agent' : 'deploying');
   const [isExiting, setIsExiting] = useState(false);
   const [scrollOffset, setScrollOffset] = useState(0);
   // Track if user manually scrolled up (false = auto-scroll to bottom)
@@ -128,6 +147,22 @@ export function DevScreen(props: DevScreenProps) {
   const { stdout } = useStdout();
   // Track when we just cancelled input to prevent double-escape quit
   const justCancelledRef = useRef(false);
+
+  // AWS target configuration (auto-creates aws-targets.json if missing)
+  const awsConfig = useAwsTargetConfig();
+
+  // Deploy phase state — wait for AWS targets before starting deploy
+  const {
+    steps: deploySteps,
+    deployMessages,
+    isComplete: deployComplete,
+    error: deployError,
+    logPath: deployLogPath,
+  } = useDevDeploy({
+    skip: props.skipDeploy,
+    ready: awsConfig.isConfigured,
+  });
+  const hasTransitionedFromDeployRef = useRef(false);
 
   // Agent selection state
   const [supportedAgents, setSupportedAgents] = useState<AgentEnvSpec[]>([]);
@@ -139,31 +174,35 @@ export function DevScreen(props: DevScreenProps) {
   const [isContainerExec, setIsContainerExec] = useState(false);
   const [execInputEmpty, setExecInputEmpty] = useState(true);
 
+  // Harness state
+  const [availableHarnesses, setAvailableHarnesses] = useState<string[]>([]);
+  const [selectedHarness, setSelectedHarness] = useState<string | undefined>();
+
   const workingDir = props.workingDir ?? process.cwd();
 
-  // Load project and get supported agents
+  // Load project and get supported agents (runs once on mount)
   useEffect(() => {
     const load = async () => {
       const project = await loadProjectConfig(workingDir);
       const agents = getDevSupportedAgents(project);
       setSupportedAgents(agents);
 
+      const harnesses = project?.harnesses ?? [];
+      setAvailableHarnesses(harnesses.map(h => h.name));
+
       // If agent name was provided via CLI, validate it
       if (props.agentName) {
         const found = agents.find(a => a.name === props.agentName);
         if (found) {
           setSelectedAgentName(props.agentName);
-          setMode('chat');
         } else if (agents.length > 0) {
-          // Agent not found or not supported, show selection
           setSelectedAgentName(undefined);
         }
-      } else if (agents.length === 1 && agents[0]) {
-        // Auto-select if only one agent
+      } else if (agents.length === 1 && harnesses.length === 0 && agents[0]) {
         setSelectedAgentName(agents[0].name);
-        setMode('chat');
-      } else if (agents.length === 0) {
-        // No supported agents, show error screen
+      } else if (harnesses.length === 1 && agents.length === 0) {
+        setSelectedHarness(harnesses[0]?.name);
+      } else if (agents.length === 0 && harnesses.length === 0) {
         setNoAgentsError(true);
       }
 
@@ -171,6 +210,52 @@ export function DevScreen(props: DevScreenProps) {
     };
     void load();
   }, [workingDir, props.agentName]);
+
+  // Handle deploy completion and transition to next mode
+  useEffect(() => {
+    if (mode !== 'deploying' || !deployComplete || !agentsLoaded || hasTransitionedFromDeployRef.current) return;
+
+    // If deploy failed, stay on deploy screen so the user sees the error.
+    if (deployError) return;
+
+    // Mark as transitioned to prevent re-running
+    hasTransitionedFromDeployRef.current = true;
+
+    // Defer state updates to avoid synchronous setState in effect
+    queueMicrotask(() => {
+      if (selectedAgentName) {
+        if (onLaunchBrowser) {
+          onLaunchBrowser(selectedAgentName);
+        } else {
+          setMode('chat');
+        }
+      } else if (selectedHarness) {
+        setMode('harness');
+      } else if (supportedAgents.length === 1 && availableHarnesses.length === 0 && supportedAgents[0]) {
+        if (onLaunchBrowser) {
+          onLaunchBrowser(supportedAgents[0].name);
+        } else {
+          setSelectedAgentName(supportedAgents[0].name);
+          setMode('chat');
+        }
+      } else if (availableHarnesses.length === 1 && supportedAgents.length === 0) {
+        setSelectedHarness(availableHarnesses[0]);
+        setMode('harness');
+      } else {
+        setMode('select-agent');
+      }
+    });
+  }, [
+    mode,
+    deployComplete,
+    deployError,
+    agentsLoaded,
+    selectedAgentName,
+    selectedHarness,
+    supportedAgents,
+    availableHarnesses,
+    onLaunchBrowser,
+  ]);
 
   const onServerReady = useCallback(() => setMode(prev => (prev === 'chat' ? 'input' : prev)), []);
 
@@ -337,21 +422,35 @@ export function DevScreen(props: DevScreenProps) {
     (input, key) => {
       // Agent selection mode
       if (mode === 'select-agent') {
+        const totalItems = supportedAgents.length + availableHarnesses.length;
         if (key.escape || (key.ctrl && input === 'q')) {
           handleExit();
           return;
         }
         if (key.upArrow || input === 'k') {
-          setSelectedAgentIndex(prev => (prev - 1 + supportedAgents.length) % supportedAgents.length);
+          setSelectedAgentIndex(prev => (prev - 1 + totalItems) % totalItems);
         }
         if (key.downArrow || input === 'j') {
-          setSelectedAgentIndex(prev => (prev + 1) % supportedAgents.length);
+          setSelectedAgentIndex(prev => (prev + 1) % totalItems);
         }
         if (key.return) {
-          const agent = supportedAgents[selectedAgentIndex];
-          if (agent) {
-            setSelectedAgentName(agent.name);
-            setMode('chat');
+          if (selectedAgentIndex < supportedAgents.length) {
+            const agent = supportedAgents[selectedAgentIndex];
+            if (agent) {
+              if (onLaunchBrowser) {
+                onLaunchBrowser(agent.name);
+              } else {
+                setSelectedAgentName(agent.name);
+                setMode('chat');
+              }
+            }
+          } else {
+            const harnessIdx = selectedAgentIndex - supportedAgents.length;
+            const harnessName = availableHarnesses[harnessIdx];
+            if (harnessName) {
+              setSelectedHarness(harnessName);
+              setMode('harness');
+            }
           }
         }
         return;
@@ -366,8 +465,8 @@ export function DevScreen(props: DevScreenProps) {
             justCancelledRef.current = false;
             return;
           }
-          // If multiple agents, go back to agent selection
-          if (supportedAgents.length > 1) {
+          // If multiple agents or harnesses, go back to selection
+          if (supportedAgents.length + availableHarnesses.length > 1) {
             stop();
             setMode('select-agent');
             setSelectedAgentName(undefined);
@@ -413,11 +512,51 @@ export function DevScreen(props: DevScreenProps) {
         }
       }
     },
-    { isActive: mode === 'chat' || mode === 'select-agent' }
+    { isActive: (mode === 'chat' || mode === 'select-agent') && !isExiting }
   );
 
-  // Return null while loading
-  if (!agentsLoaded || (mode !== 'select-agent' && !noAgentsError && (!configLoaded || !config))) {
+  // AWS target config screen (shown during deploy phase if targets not yet configured)
+  if (mode === 'deploying' && !awsConfig.isConfigured) {
+    return (
+      <Screen title="Dev" onExit={handleExit} helpText={getAwsConfigHelpText(awsConfig.phase)}>
+        <AwsTargetConfigUI config={awsConfig} onExit={handleExit} isActive={true} />
+      </Screen>
+    );
+  }
+
+  // Deploying screen
+  if (mode === 'deploying') {
+    const hasStartedCfn = deployMessages.length > 0;
+    const displaySteps = hasStartedCfn ? deploySteps.filter(s => s.label !== 'Deploy to AWS') : deploySteps;
+
+    return (
+      <Screen title="Dev" onExit={handleExit} helpText="Esc quit">
+        <Box flexDirection="column" paddingX={1}>
+          <Text bold>Deploying project resources...</Text>
+          <Box marginTop={1}>
+            <StepProgress steps={displaySteps} />
+          </Box>
+          {hasStartedCfn && (
+            <Box marginTop={1}>
+              <DeployStatus messages={deployMessages} isComplete={deployComplete} hasError={!!deployError} />
+            </Box>
+          )}
+          {deployError && (
+            <Box marginTop={1}>
+              <Text color="yellow">Deploy failed: {deployError}</Text>
+            </Box>
+          )}
+          {deployLogPath && <LogLink filePath={deployLogPath} />}
+        </Box>
+      </Screen>
+    );
+  }
+
+  // Return null while loading (harness mode doesn't need dev server config)
+  if (
+    !agentsLoaded ||
+    (mode !== 'select-agent' && mode !== 'harness' && !noAgentsError && (!configLoaded || !config))
+  ) {
     return null;
   }
 
@@ -426,8 +565,8 @@ export function DevScreen(props: DevScreenProps) {
     return (
       <Screen title="Dev Server" onExit={props.onBack} helpText="Esc quit">
         <Box flexDirection="column">
-          <Text color="red">No agents defined in project.</Text>
-          <Text>Dev mode requires at least one Python agent with an entrypoint.</Text>
+          <Text color="red">No agents or harnesses defined in project.</Text>
+          <Text>Dev mode requires at least one Python agent with an entrypoint or a harness.</Text>
           <Text>
             Run <Text color="blue">agentcore add agent</Text> to create one.
           </Text>
@@ -436,13 +575,18 @@ export function DevScreen(props: DevScreenProps) {
     );
   }
 
+  // If harness mode, render the InvokeScreen with the pre-selected harness
+  if (mode === 'harness') {
+    return <InvokeScreen isInteractive={true} onExit={handleExit} title="Dev" initialHarnessName={selectedHarness} />;
+  }
+
   const statusColor = { starting: 'yellow', running: 'green', error: 'red', stopped: 'gray' }[status];
 
   // Visible lines for display
   const visibleLines = lines.slice(effectiveOffset, effectiveOffset + displayHeight);
 
   // Dynamic help text
-  const backOrQuit = supportedAgents.length > 1 ? 'Esc back' : 'Esc quit';
+  const backOrQuit = supportedAgents.length + availableHarnesses.length > 1 ? 'Esc back' : 'Esc quit';
   const execHint = isContainer ? '! exec local · !! exec container' : '! exec';
   const helpText =
     mode === 'select-agent'
@@ -468,15 +612,23 @@ export function DevScreen(props: DevScreenProps) {
   // Agent selection screen
   if (mode === 'select-agent') {
     const agentItems = supportedAgents.map((agent, i) => ({
-      id: String(i),
+      id: `agent-${i}`,
       title: agent.name,
       description: `${agent.runtimeVersion} · ${agent.build}`,
     }));
 
+    const harnessItems = availableHarnesses.map((name, i) => ({
+      id: `harness-${i}`,
+      title: name,
+      description: 'Harness (cloud)',
+    }));
+
+    const allItems = [...agentItems, ...harnessItems];
+
     return (
       <Screen title="Dev Server" onExit={handleExit} helpText={helpText}>
-        <Panel title="Select Agent" fullWidth>
-          <SelectList items={agentItems} selectedIndex={selectedAgentIndex} />
+        <Panel title={availableHarnesses.length > 0 ? 'Select Target' : 'Select Agent'} fullWidth>
+          <SelectList items={allItems} selectedIndex={selectedAgentIndex} />
         </Panel>
       </Screen>
     );

@@ -51,6 +51,8 @@ export interface InvokeFlowOptions {
   /** Custom headers to forward to the agent runtime on every invocation */
   headers?: Record<string, string>;
   initialBearerToken?: string;
+  /** Pre-select a harness by name, skipping the agent selection screen */
+  initialHarnessName?: string;
 }
 
 export type TokenFetchState = 'idle' | 'fetching' | 'fetched' | 'error';
@@ -91,7 +93,7 @@ export interface InvokeFlowState {
 }
 
 export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState {
-  const { initialSessionId, initialUserId, headers, initialBearerToken } = options;
+  const { initialSessionId, initialUserId, headers, initialBearerToken, initialHarnessName } = options;
   const [phase, setPhase] = useState<'loading' | 'ready' | 'invoking' | 'tool-approval' | 'error'>('loading');
   const [pendingToolApproval, setPendingToolApproval] = useState<PendingToolApproval | null>(null);
   const [config, setConfig] = useState<InvokeConfig | null>(null);
@@ -179,6 +181,13 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
 
         setConfig({ runtimes, harnesses, target: targetConfig, targetName, projectName: project.name });
 
+        if (initialHarnessName) {
+          const harnessIdx = harnesses.findIndex(h => h.name === initialHarnessName);
+          if (harnessIdx >= 0) {
+            setSelectedAgent(runtimes.length + harnessIdx);
+          }
+        }
+
         // Initialize session ID - always generate fresh unless explicitly provided
         if (initialSessionId) {
           setSessionId(initialSessionId);
@@ -194,7 +203,7 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
       }
     };
     void load();
-  }, [initialSessionId]);
+  }, [initialSessionId, initialHarnessName]);
 
   const getMcpInvokeOptions = useCallback(() => {
     if (!config) return null;

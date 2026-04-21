@@ -1,6 +1,7 @@
 import { ConfigIO, SecureCredentials } from '../../../lib';
 import type { AgentCoreMcpSpec, DeployedState, HarnessDeployedState } from '../../../schema';
 import { validateAwsCredentials } from '../../aws/account';
+import type { DeployMessage } from '../../cdk/toolkit-lib';
 import { createSwitchableIoHost } from '../../cdk/toolkit-lib';
 import {
   buildDeployedState,
@@ -42,6 +43,7 @@ export interface ValidatedDeployOptions {
   diff?: boolean;
   onProgress?: (step: string, status: 'start' | 'success' | 'error') => void;
   onResourceEvent?: (message: string) => void;
+  onDeployMessage?: (message: DeployMessage) => void;
 }
 
 const AGENT_NEXT_STEPS = ['agentcore invoke', 'agentcore status'];
@@ -219,7 +221,7 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
 
     // Synthesize CloudFormation templates
     startStep('Synthesize CloudFormation');
-    const switchableIoHost = options.verbose ? createSwitchableIoHost() : undefined;
+    const switchableIoHost = options.verbose || options.onDeployMessage ? createSwitchableIoHost() : undefined;
     const synthResult = await synthesizeCdk(
       context.cdkProject,
       switchableIoHost ? { ioHost: switchableIoHost.ioHost } : undefined
@@ -315,13 +317,19 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
 
     // Deploy
     const hasGateways = (mcpSpec?.agentCoreGateways?.length ?? 0) > 0;
-    const deployStepName = hasGateways ? 'Deploying gateways...' : 'Deploy to AWS';
+    const hasHarnessResources = (context.projectSpec.harnesses ?? []).length > 0;
+    const deployStepName = hasGateways
+      ? 'Deploying gateways...'
+      : hasHarnessResources
+        ? 'Deploy stack'
+        : 'Deploy to AWS';
     startStep(deployStepName);
 
     // Enable verbose output for resource-level events
-    if (switchableIoHost && options.onResourceEvent) {
+    if (switchableIoHost && (options.onResourceEvent || options.onDeployMessage)) {
       switchableIoHost.setOnMessage(msg => {
-        options.onResourceEvent!(msg.message);
+        options.onResourceEvent?.(msg.message);
+        options.onDeployMessage?.(msg);
       });
       switchableIoHost.setVerbose(true);
     }
@@ -437,6 +445,8 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       ) ?? {};
     const gateways = parseGatewayOutputs(outputs, gatewaySpecs);
 
+    endStep('success');
+
     // Post-CDK: deploy imperative resources (harness)
     let deployedHarnesses: Record<string, HarnessDeployedState> | undefined;
     const imperativeManager = createDeploymentManager();
@@ -510,8 +520,6 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       }
     }
 
-    endStep('success');
-
     // Post-deploy: Enable CloudWatch Transaction Search (non-blocking, silent)
     const hasHarnesses = (context.projectSpec.harnesses ?? []).length > 0;
     const hasInvokable = agentNames.length > 0 || hasHarnesses;
@@ -549,6 +557,9 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       notes,
     };
   } catch (err: unknown) {
+    if (currentStepName) {
+      endStep('error', getErrorMessage(err));
+    }
     logger.log(getErrorMessage(err), 'error');
     logger.finalize(false);
     return { success: false, error: getErrorMessage(err), logPath: logger.getRelativeLogPath() };

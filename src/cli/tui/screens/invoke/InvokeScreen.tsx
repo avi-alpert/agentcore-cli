@@ -8,12 +8,16 @@ interface InvokeScreenProps {
   /** Whether running in interactive TUI mode (from App.tsx) vs CLI mode */
   isInteractive: boolean;
   onExit: () => void;
+  /** Override the screen title (defaults to "AgentCore Invoke") */
+  title?: string;
   initialPrompt?: string;
   initialSessionId?: string;
   initialUserId?: string;
   /** Custom headers to forward to the agent runtime on every invocation */
   initialHeaders?: Record<string, string>;
   initialBearerToken?: string;
+  /** Pre-select a harness by name, skipping the agent selection screen */
+  initialHarnessName?: string;
 }
 
 type Mode = 'select-agent' | 'chat' | 'input' | 'token-input' | 'tool-approval';
@@ -112,11 +116,13 @@ function wrapColoredLines(lines: ColoredLine[], maxWidth: number): ColoredLine[]
 export function InvokeScreen({
   isInteractive: _isInteractive,
   onExit,
+  title: screenTitle = 'AgentCore Invoke',
   initialPrompt,
   initialSessionId,
   initialUserId,
   initialHeaders,
   initialBearerToken,
+  initialHarnessName,
 }: InvokeScreenProps) {
   const {
     phase,
@@ -139,8 +145,14 @@ export function InvokeScreen({
     respondToTool,
     newSession,
     fetchMcpTools,
-  } = useInvokeFlow({ initialSessionId, initialUserId, headers: initialHeaders, initialBearerToken });
-  const [mode, setMode] = useState<Mode>('select-agent');
+  } = useInvokeFlow({
+    initialSessionId,
+    initialUserId,
+    headers: initialHeaders,
+    initialBearerToken,
+    initialHarnessName,
+  });
+  const [mode, setMode] = useState<Mode>(initialHarnessName ? 'input' : 'select-agent');
   const [toolApprovalIndex, setToolApprovalIndex] = useState(0);
   const [isExecInput, setIsExecInput] = useState(false);
   const [execInputEmpty, setExecInputEmpty] = useState(true);
@@ -358,7 +370,7 @@ export function InvokeScreen({
   // Error state - show error in main screen
   if (phase === 'error') {
     return (
-      <Screen title="AgentCore Invoke" onExit={onExit}>
+      <Screen title={screenTitle} onExit={onExit}>
         <Text color="red">{error}</Text>
       </Screen>
     );
@@ -482,7 +494,7 @@ export function InvokeScreen({
   // Agent selection mode
   if (mode === 'select-agent') {
     return (
-      <Screen title="AgentCore Invoke" onExit={onExit} helpText={helpText} headerContent={headerContent}>
+      <Screen title={screenTitle} onExit={onExit} helpText={helpText} headerContent={headerContent}>
         <Panel title="Select Agent" fullWidth>
           <SelectList items={agentItems} selectedIndex={selectedAgent} />
         </Panel>

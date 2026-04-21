@@ -22,8 +22,9 @@ import { FatalError } from '../../tui/components';
 import { LayoutProvider } from '../../tui/context';
 import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
 import { requireProject } from '../../tui/guards';
+import { runCliDeploy } from '../deploy/progress';
 import { parseHeaderFlags } from '../shared/header-utils';
-import { runBrowserMode } from './browser-mode';
+import { launchTuiDevScreenWithPicker, runBrowserMode } from './browser-mode';
 import type { Command } from '@commander-js/extra-typings';
 import { spawn } from 'child_process';
 import { Text, render } from 'ink';
@@ -178,6 +179,7 @@ export const registerDev = (program: Command) => {
     .option('--exec', 'Execute a shell command in the running dev container (Container agents only) [non-interactive]')
     .option('--tool <name>', 'MCP tool name (used with "call-tool" prompt) [non-interactive]')
     .option('--input <json>', 'MCP tool arguments as JSON (used with --tool) [non-interactive]')
+    .option('--skip-deploy', 'Skip automatic resource deployment before starting dev server')
     .option(
       '-H, --header <header>',
       'Custom header to forward to the agent (format: "Name: Value", repeatable) [non-interactive]',
@@ -263,8 +265,13 @@ export const registerDev = (program: Command) => {
           process.exit(1);
         }
 
-        if (!project.runtimes || project.runtimes.length === 0) {
-          render(<FatalError message="No agents defined in project." suggestedCommand="agentcore add agent" />);
+        const hasRuntimes = project.runtimes && project.runtimes.length > 0;
+        const hasHarnesses = project.harnesses && project.harnesses.length > 0;
+
+        if (!hasRuntimes && !hasHarnesses) {
+          render(
+            <FatalError message="No agents or harnesses defined in project." suggestedCommand="agentcore add agent" />
+          );
           process.exit(1);
         }
 
@@ -277,9 +284,9 @@ export const registerDev = (program: Command) => {
         }
 
         const supportedAgents = getDevSupportedAgents(project);
-        if (supportedAgents.length === 0) {
+        if (supportedAgents.length === 0 && !hasHarnesses) {
           render(
-            <FatalError message="No agents support dev mode. Dev mode requires Python agents with an entrypoint." />
+            <FatalError message="No agents support dev mode. Dev mode requires Python agents with an entrypoint or a harness." />
           );
           process.exit(1);
         }
@@ -299,6 +306,11 @@ export const registerDev = (program: Command) => {
 
         // If --logs provided, run non-interactive mode
         if (opts.logs) {
+          if (supportedAgents.length === 0) {
+            console.log('Harness-only projects do not support --logs mode. Use `agentcore dev` for TUI mode.');
+            process.exit(0);
+          }
+
           // Require --agent if multiple agents
           if (project.runtimes.length > 1 && !opts.runtime) {
             const names = project.runtimes.map(a => a.name).join(', ');
@@ -335,6 +347,11 @@ export const registerDev = (program: Command) => {
 
           // Get provider info from agent config
           const providerInfo = '(see agent code)';
+
+          // Deploy resources before starting dev server
+          if (!opts.skipDeploy) {
+            await runCliDeploy();
+          }
 
           console.log(`Starting dev server...`);
           console.log(`Agent: ${config.agentName}`);
@@ -399,6 +416,7 @@ export const registerDev = (program: Command) => {
                 port={port}
                 agentName={opts.runtime}
                 headers={headers}
+                skipDeploy={opts.skipDeploy}
               />
             </LayoutProvider>
           );
@@ -408,7 +426,32 @@ export const registerDev = (program: Command) => {
           return;
         }
 
-        // Default: launch web UI in browser
+        // Projects with harnesses route through the TUI DevScreen for agent/harness selection.
+        // Selecting a code-based agent exits TUI and opens Agent Inspector in the browser.
+        if (hasHarnesses) {
+          const browserAgentName = await launchTuiDevScreenWithPicker(workingDir, {
+            skipDeploy: opts.skipDeploy,
+          });
+
+          if (browserAgentName) {
+            await runBrowserMode({
+              workingDir,
+              project,
+              port,
+              agentName: browserAgentName,
+              otelEnvVars,
+              collector,
+            });
+          }
+          return;
+        }
+
+        // Deploy resources before launching web UI (agents-only projects)
+        if (!opts.skipDeploy) {
+          await runCliDeploy();
+        }
+
+        // Default: launch web UI in browser (agents-only projects)
         await runBrowserMode({
           workingDir,
           project,

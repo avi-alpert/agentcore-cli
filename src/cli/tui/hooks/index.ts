@@ -7,6 +7,8 @@ export { useListNavigation } from './useListNavigation';
 export { useMultiSelectNavigation } from './useMultiSelectNavigation';
 export { useResponsive } from './useResponsive';
 export { useAvailableAgents, useCreateGateway, useExistingGateways } from './useCreateMcp';
+export { useDevDeploy } from './useDevDeploy';
+export type { UseDevDeployOptions, UseDevDeployResult } from './useDevDeploy';
 export { useDevServer } from './useDevServer';
 export { useProject } from './useProject';
 export type { UseProjectResult, ProjectContext } from './useProject';

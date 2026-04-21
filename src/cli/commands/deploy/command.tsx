@@ -3,13 +3,12 @@ import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
 import { requireProject } from '../../tui/guards';
 import { DeployScreen } from '../../tui/screens/deploy/DeployScreen';
 import { handleDeploy } from './actions';
+import { createSpinnerProgress } from './progress';
 import type { DeployOptions } from './types';
 import { validateDeployOptions } from './validate';
 import type { Command } from '@commander-js/extra-typings';
 import { Text, render } from 'ink';
 import React from 'react';
-
-const SPINNER_FRAMES = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
 
 function handleDeployTUI(options: { autoConfirm?: boolean; diffMode?: boolean } = {}): void {
   requireProject();
@@ -38,30 +37,8 @@ async function handleDeployCLI(options: DeployOptions): Promise<void> {
     process.exit(1);
   }
 
-  let spinner: NodeJS.Timeout | undefined;
-
-  // Progress callback for --progress mode
-  const onProgress = options.progress
-    ? (step: string, status: 'start' | 'success' | 'error') => {
-        if (spinner) {
-          clearInterval(spinner);
-          process.stdout.write('\r\x1b[K'); // Clear line
-        }
-
-        if (status === 'start') {
-          let i = 0;
-          process.stdout.write(`${SPINNER_FRAMES[0]} ${step}...`);
-          spinner = setInterval(() => {
-            i = (i + 1) % SPINNER_FRAMES.length;
-            process.stdout.write(`\r${SPINNER_FRAMES[i]} ${step}...`);
-          }, 80);
-        } else if (status === 'success') {
-          console.log(`✓ ${step}`);
-        } else {
-          console.log(`✗ ${step}`);
-        }
-      }
-    : undefined;
+  const progressUtil = options.progress ? createSpinnerProgress() : undefined;
+  const onProgress = progressUtil?.onProgress;
 
   const onResourceEvent = options.verbose
     ? (message: string) => {
@@ -79,10 +56,7 @@ async function handleDeployCLI(options: DeployOptions): Promise<void> {
     onResourceEvent,
   });
 
-  if (spinner) {
-    clearInterval(spinner);
-    process.stdout.write('\r\x1b[K');
-  }
+  progressUtil?.cleanup();
 
   if (options.json) {
     console.log(JSON.stringify(result));

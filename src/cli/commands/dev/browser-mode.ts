@@ -9,7 +9,11 @@ import {
   runWebUI,
 } from '../../operations/dev/web-ui';
 import { listMemoryRecords, retrieveMemoryRecords } from '../../operations/memory';
+import { LayoutProvider } from '../../tui/context';
+import { runCliDeploy } from '../deploy/progress';
+import { render } from 'ink';
 import path from 'node:path';
+import React from 'react';
 
 interface DeployedHandlers {
   onListMemoryRecords?: ListMemoryRecordsHandler;
@@ -108,10 +112,40 @@ export async function launchBrowserDev(): Promise<void> {
   const workingDir = getWorkingDirectory();
   const project = await loadProjectConfig(workingDir);
 
-  if (!project?.runtimes || project.runtimes.length === 0) {
+  if (!project) {
     console.error('Error: No agents defined in project.');
     process.exit(1);
   }
+
+  const hasHarnesses = (project.harnesses ?? []).length > 0;
+
+  // Projects with harnesses go through the TUI for agent/harness selection.
+  // Selecting a code-based agent exits TUI and opens Agent Inspector.
+  if (hasHarnesses) {
+    const selectedAgent = await launchTuiDevScreenWithPicker(workingDir);
+    if (!selectedAgent) return;
+
+    const configRoot = findConfigRoot(workingDir);
+    const persistTracesDir = path.join(configRoot ?? workingDir, '.cli', 'traces');
+    const { collector, otelEnvVars } = await startOtelCollector(persistTracesDir);
+
+    await runBrowserMode({
+      workingDir,
+      project,
+      port: 8080,
+      agentName: selectedAgent,
+      otelEnvVars,
+      collector,
+    });
+    return;
+  }
+
+  if (project.runtimes.length === 0) {
+    console.error('Error: No agents defined in project.');
+    process.exit(1);
+  }
+
+  await runCliDeploy();
 
   const configRoot = findConfigRoot(workingDir);
   const persistTracesDir = path.join(configRoot ?? workingDir, '.cli', 'traces');
@@ -204,4 +238,47 @@ export async function runBrowserMode(opts: BrowserModeOptions): Promise<void> {
       },
     },
   });
+}
+
+const ENTER_ALT_SCREEN = '\x1B[?1049h\x1B[H';
+const EXIT_ALT_SCREEN = '\x1B[?1049l';
+const SHOW_CURSOR = '\x1B[?25h';
+
+export async function launchTuiDevScreenWithPicker(
+  workingDir: string,
+  options?: { skipDeploy?: boolean }
+): Promise<string | undefined> {
+  process.stdout.write(ENTER_ALT_SCREEN);
+
+  const exitAltScreen = () => {
+    process.stdout.write(EXIT_ALT_SCREEN);
+    process.stdout.write(SHOW_CURSOR);
+  };
+
+  let browserAgentName: string | undefined;
+  const { DevScreen } = await import('../../tui/screens/dev/DevScreen');
+  const { unmount, waitUntilExit } = render(
+    React.createElement(
+      LayoutProvider,
+      null,
+      React.createElement(DevScreen, {
+        onBack: () => {
+          exitAltScreen();
+          unmount();
+          process.exit(0);
+        },
+        workingDir,
+        skipDeploy: options?.skipDeploy,
+        onLaunchBrowser: (agentName: string) => {
+          browserAgentName = agentName;
+          exitAltScreen();
+          unmount();
+        },
+      })
+    )
+  );
+
+  await waitUntilExit();
+  exitAltScreen();
+  return browserAgentName;
 }
