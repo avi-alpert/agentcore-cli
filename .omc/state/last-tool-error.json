@@ -1,7 +1,0 @@
-{
-  "tool_name": "Bash",
-  "tool_input_preview": "{\"command\":\"git checkout feat/harness-tui-tools-invoke-script && git rebase origin/feat/harness-implementation 2>&1\",\"description\":\"Rebase PR branch onto latest base\"}",
-  "error": "Exit code 1\nAlready on 'feat/harness-tui-tools-invoke-script'\nYour branch is up to date with 'origin/feat/harness-tui-tools-invoke-script'.\nRebasing (1/2)\rAuto-merging src/cli/primitives/HarnessPrimitive.ts\nCONFLICT (content): Merge conflict in src/cli/primitives/HarnessPrimitive.ts\nAuto-merging src/cli/tui/screens/harness/AddHarnessScreen.tsx\nCONFLICT (content): Merge conflict in src/cli/tui/screens/harness/AddHarnessScreen.tsx\nAuto-merging src/cli/tui/screens/harness/types.ts\nCONFLICT (content...",
-  "timestamp": "2026-04-21T16:30:32.834Z",
-  "retry_count": 1
-}
