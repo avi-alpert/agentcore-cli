@@ -318,14 +318,14 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
       }
       if (!postCdkResult.success) {
         logger.endStep('error', postCdkResult.error);
-        setPostCdkStep({ label: 'Deploy harnesses', status: 'error', error: postCdkResult.error });
         harnessDeployError = postCdkResult.error;
       } else {
         logger.endStep('success');
-        setPostCdkStep({ label: 'Deploy harnesses', status: 'success' });
       }
     }
 
+    // Persist state BEFORE updating React step status — React state updates can
+    // interrupt this async callback by triggering re-renders that dispose resources.
     const deployedState = buildDeployedState({
       targetName: target.name,
       stackName: currentStackName,
@@ -342,6 +342,15 @@ export function useDeployFlow(options: DeployFlowOptions = {}): DeployFlowState 
       harnesses: deployedHarnesses,
     });
     await configIO.writeDeployedState(deployedState);
+
+    // Now safe to update React state — the file write is complete
+    if (imperativeManager.hasDeployersForPhase('post-cdk', imperativeContext)) {
+      if (harnessDeployError) {
+        setPostCdkStep({ label: 'Deploy harnesses', status: 'error', error: harnessDeployError });
+      } else {
+        setPostCdkStep({ label: 'Deploy harnesses', status: 'success' });
+      }
+    }
 
     if (harnessDeployError) {
       throw new Error(`Harness deployment failed: ${harnessDeployError}`);
