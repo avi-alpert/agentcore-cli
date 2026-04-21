@@ -305,6 +305,7 @@ export function useCreateFlow(cwd: string): CreateFlowState {
                   jwtConfig: addAgentConfig.jwtConfig,
                   idleRuntimeSessionTimeout: addAgentConfig.idleRuntimeSessionTimeout,
                   maxLifetime: addAgentConfig.maxLifetime,
+                  sessionStorageMountPath: addAgentConfig.sessionStorageMountPath,
                 };
 
                 logger.logSubStep(`Framework: ${generateConfig.sdk}`);
@@ -380,6 +381,9 @@ export function useCreateFlow(cwd: string): CreateFlowState {
                   configBaseDir,
                   authorizerType: addAgentConfig.authorizerType,
                   jwtConfig: addAgentConfig.jwtConfig,
+                  idleTimeout: addAgentConfig.idleRuntimeSessionTimeout,
+                  maxLifetime: addAgentConfig.maxLifetime,
+                  sessionStorageMountPath: addAgentConfig.sessionStorageMountPath,
                 });
                 if (!importResult.success) {
                   throw new Error(importResult.error ?? 'Import failed');
