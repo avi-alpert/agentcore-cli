@@ -644,27 +644,14 @@ export function useInvokeFlow(options: InvokeFlowOptions = {}): InvokeFlowState 
       const agent = isHarnessExec ? undefined : config.runtimes[selectedAgent];
       if (!agent && !isHarnessExec) return;
 
-      // For harness exec, we need the underlying agentRuntimeArn
       let execRuntimeArn: string | undefined;
       let execName: string;
       if (isHarnessExec) {
         const harnessIdx = selectedAgent - config.runtimes.length;
         const harness = config.harnesses[harnessIdx];
         if (!harness) return;
-        execRuntimeArn = harness.state.agentRuntimeArn;
+        execRuntimeArn = harness.state.harnessArn;
         execName = harness.name;
-        if (!execRuntimeArn) {
-          setMessages(prev => [
-            ...prev,
-            { role: 'user', content: `! ${command}`, isExec: true },
-            {
-              role: 'assistant',
-              content: 'Exec requires agentRuntimeArn in deployed state. Re-deploy to populate it.',
-              isExec: true,
-            },
-          ]);
-          return;
-        }
       } else {
         execRuntimeArn = agent!.state.runtimeArn;
         execName = agent!.name;

@@ -56,7 +56,7 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   name: 'Name',
   'model-provider': 'Model provider',
   'api-key-arn': 'API key ARN',
-  container: 'Container',
+  container: 'Custom environment',
   'container-uri': 'Container URI',
   'container-dockerfile': 'Dockerfile path',
   advanced: 'Advanced settings',
@@ -78,17 +78,17 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   confirm: 'Confirm',
 };
 
-export const MODEL_PROVIDER_OPTIONS = [
-  { id: 'bedrock' as const, title: 'Amazon Bedrock', description: 'Use models via Amazon Bedrock' },
-  { id: 'open_ai' as const, title: 'OpenAI', description: 'Use OpenAI models (requires API key ARN)' },
-  { id: 'gemini' as const, title: 'Google Gemini', description: 'Use Google Gemini models (requires API key ARN)' },
-] as const;
-
 export const DEFAULT_MODEL_IDS: Record<HarnessModelProvider, string> = {
   bedrock: 'global.anthropic.claude-sonnet-4-6',
   open_ai: 'gpt-5',
   gemini: 'gemini-2.5-flash',
 };
+
+export const MODEL_PROVIDER_OPTIONS = [
+  { id: 'bedrock' as const, title: 'Amazon Bedrock', description: `Default: ${DEFAULT_MODEL_IDS.bedrock}` },
+  { id: 'open_ai' as const, title: 'OpenAI', description: `Default: ${DEFAULT_MODEL_IDS.open_ai} (requires API key ARN)` },
+  { id: 'gemini' as const, title: 'Google Gemini', description: `Default: ${DEFAULT_MODEL_IDS.gemini} (requires API key ARN)` },
+] as const;
 
 export const TRUNCATION_STRATEGY_OPTIONS = [
   { id: 'sliding_window' as const, title: 'Sliding window', description: 'Keep most recent messages' },
@@ -96,13 +96,13 @@ export const TRUNCATION_STRATEGY_OPTIONS = [
 ] as const;
 
 export const ADVANCED_SETTING_OPTIONS = [
-  { id: 'tools', title: 'Tools', description: 'Browser, Code Interpreter, Remote MCP, Gateway' },
-  { id: 'memory', title: 'Memory', description: 'Enable or disable persistent memory' },
-  { id: 'network', title: 'Network', description: 'VPC configuration' },
-  { id: 'lifecycle', title: 'Lifecycle', description: 'Idle timeout and max lifetime' },
-  { id: 'execution', title: 'Execution limits', description: 'Iterations, tokens, timeout' },
-  { id: 'truncation', title: 'Truncation', description: 'Context management strategy' },
-  { id: 'session-storage', title: 'Session Storage', description: 'Persistent storage mount path' },
+  { id: 'memory', title: 'Memory', description: 'Retain context across sessions' },
+  { id: 'tools', title: 'Tools', description: 'Add browser, code interpreter, MCP, or gateway tools' },
+  { id: 'network', title: 'Network', description: 'Deploy inside a VPC with custom subnets and security groups' },
+  { id: 'lifecycle', title: 'Lifecycle', description: 'Set idle timeout and max session lifetime' },
+  { id: 'execution', title: 'Execution limits', description: 'Cap iterations, tokens, and per-turn timeout' },
+  { id: 'truncation', title: 'Truncation', description: 'Choose how context is managed when it exceeds limits' },
+  { id: 'session-storage', title: 'Session Storage', description: 'Mount persistent storage for session data' },
 ] as const;
 
 export type AdvancedSetting = (typeof ADVANCED_SETTING_OPTIONS)[number]['id'];
@@ -117,16 +117,16 @@ export const MEMORY_OPTIONS = [
 ] as const;
 
 export const CONTAINER_MODE_OPTIONS = [
-  { id: 'none' as const, title: 'None', description: 'Use the default managed runtime' },
+  { id: 'none' as const, title: 'Default Environment', description: 'Includes Python, Bash, File tools' },
   { id: 'uri' as const, title: 'Container URI', description: 'Use a pre-built container image (ECR URI)' },
-  { id: 'dockerfile' as const, title: 'Dockerfile', description: 'Build from a Dockerfile' },
+  { id: 'dockerfile' as const, title: 'Dockerfile', description: 'Bring your own Dockerfile' },
 ] as const;
 
 export const TOOL_SELECT_OPTIONS = [
-  { id: 'agentcore_browser' as const, title: 'Browser', description: 'Web browsing and automation' },
-  { id: 'agentcore_code_interpreter' as const, title: 'Code Interpreter', description: 'Sandboxed code execution' },
-  { id: 'remote_mcp' as const, title: 'Remote MCP Server', description: 'Connect to an MCP server' },
+  { id: 'agentcore_browser' as const, title: 'AgentCore Browser', description: 'Web browsing and automation' },
+  { id: 'agentcore_code_interpreter' as const, title: 'AgentCore Code Interpreter', description: 'Sandboxed code execution' },
   { id: 'agentcore_gateway' as const, title: 'AgentCore Gateway', description: 'Connect via gateway' },
+  { id: 'remote_mcp' as const, title: 'Remote MCP Server', description: 'Connect to an MCP server' },
 ] as const;
 
 export const NETWORK_MODE_OPTIONS = [

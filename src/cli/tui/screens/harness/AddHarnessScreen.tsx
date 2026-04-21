@@ -273,7 +273,7 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
 
         {isContainerStep && (
           <WizardSelect
-            title="Custom container"
+            title="Custom environment"
             description="Optionally provide a custom container image for the harness runtime"
             items={containerModeItems}
             selectedIndex={containerModeNav.selectedIndex}

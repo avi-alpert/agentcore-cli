@@ -400,12 +400,12 @@ export function InvokeScreen({
     ...config.runtimes.map((a, i) => ({
       id: String(i),
       title: a.name,
-      description: `${a.protocol && a.protocol !== 'HTTP' ? `${a.protocol} · ` : ''}Agent Runtime`,
+      description: `${a.protocol && a.protocol !== 'HTTP' ? `${a.protocol} · ` : ''}Agent`,
     })),
     ...config.harnesses.map((h, i) => ({
       id: String(config.runtimes.length + i),
       title: h.name,
-      description: 'Harness (managed loop)',
+      description: 'Harness',
     })),
   ];
 
@@ -488,6 +488,11 @@ export function InvokeScreen({
           This agent uses VPC network mode. Ensure your VPC endpoints are configured for invocation.
         </Text>
       )}
+      {mode !== 'select-agent' && isHarnessSelected && screenTitle === 'Dev' && (
+        <Text color="yellow">
+          If you changed the harness config, redeploy to pick up changes: agentcore deploy
+        </Text>
+      )}
     </Box>
   );
 
@@ -511,7 +516,7 @@ export function InvokeScreen({
 
   return (
     <Screen
-      title="AgentCore Invoke"
+      title={screenTitle}
       onExit={onExit}
       helpText={helpText}
       headerContent={headerContent}

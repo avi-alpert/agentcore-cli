@@ -620,7 +620,7 @@ export function DevScreen(props: DevScreenProps) {
     const harnessItems = availableHarnesses.map((name, i) => ({
       id: `harness-${i}`,
       title: name,
-      description: 'Harness (cloud)',
+      description: 'Harness',
     }));
 
     const allItems = [...agentItems, ...harnessItems];

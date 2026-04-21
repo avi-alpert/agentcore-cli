@@ -213,7 +213,6 @@ export function ResourceGraph({ project, mcp, agentName, resourceStatuses }: Res
                 icon={ICONS.harness}
                 color="cyan"
                 name={harness.name}
-                detail="managed loop"
                 status={harnessStatus}
                 statusColor={harnessStatusColor}
                 deploymentState={rsEntry?.deploymentState}

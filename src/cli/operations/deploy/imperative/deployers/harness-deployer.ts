@@ -178,7 +178,11 @@ export class HarnessDeployer implements ImperativeDeployer<HarnessDeployedStateM
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        return { success: false, error: `Failed to deploy harness "${entry.name}": ${message}`, state: resultState };
+        const hint = getDeployErrorHint(err, region);
+        const errorMsg = hint
+          ? `Failed to deploy harness "${entry.name}": ${message}\n${hint}`
+          : `Failed to deploy harness "${entry.name}": ${message}`;
+        return { success: false, error: errorMsg, state: resultState };
       }
     }
 
@@ -283,4 +287,23 @@ function extractRuntimeArn(harness: Harness): string | undefined {
 
 function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function getDeployErrorHint(err: unknown, region: string): string | undefined {
+  if (!(err instanceof AgentCoreApiError)) return undefined;
+  const body = err.errorBody.toLowerCase();
+
+  if (err.statusCode === 403) {
+    return 'Check that your AWS credentials have permission to call the AgentCore Harness API.';
+  }
+  if (body.includes('not available') || body.includes('not supported') || body.includes('endpoint')) {
+    return `Harness may not be available in ${region}. Try a different region (e.g., us-east-1, us-west-2).`;
+  }
+  if (err.statusCode === 429) {
+    return 'Too many requests. Wait a moment and try again.';
+  }
+  if (err.statusCode >= 500) {
+    return 'This looks like a service-side issue. Wait a moment and redeploy.';
+  }
+  return undefined;
 }

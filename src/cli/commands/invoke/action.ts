@@ -463,9 +463,6 @@ async function handleHarnessInvoke(
 
   // Exec mode: run shell command on harness VM via InvokeAgentRuntimeCommand
   if (options.exec) {
-    if (!harnessState.agentRuntimeArn) {
-      return { success: false, error: 'Exec requires agentRuntimeArn in deployed state. Re-deploy to populate it.' };
-    }
     const command = options.prompt;
     if (!command) {
       return {
@@ -477,7 +474,7 @@ async function handleHarnessInvoke(
     try {
       const result = await executeBashCommand({
         region: targetConfig.region,
-        runtimeArn: harnessState.agentRuntimeArn,
+        runtimeArn: harnessState.harnessArn,
         command,
         sessionId: options.sessionId,
         timeout: options.timeout,

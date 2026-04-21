@@ -74,7 +74,7 @@ function buildExitMessage(
     const harnessPath = `harness/${harnessConfig.name}/`;
     const agentcorePath = 'agentcore/';
     const maxPathLen = Math.max(harnessPath.length, agentcorePath.length);
-    lines.push(`    ${harnessPath.padEnd(maxPathLen)}  \x1b[2mHarness (managed agent loop)\x1b[0m`);
+    lines.push(`    ${harnessPath.padEnd(maxPathLen)}  \x1b[2mHarness\x1b[0m`);
     lines.push(`    ${agentcorePath.padEnd(maxPathLen)}  \x1b[2mConfig and CDK project\x1b[0m`);
     lines.push('');
     lines.push(`\x1b[2mModel:\x1b[0m ${harnessConfig.modelId} \x1b[2mvia ${harnessConfig.modelProvider}\x1b[0m`);
@@ -149,8 +149,8 @@ function getCreateNextSteps(hasAgent: boolean, hasHarness: boolean): NextStep[] 
 }
 
 const CREATE_TYPE_ITEMS = [
-  { id: 'harness', title: 'Harness (recommended)', description: 'Managed agent loop, no code required' },
-  { id: 'agent', title: 'Agent Runtime', description: 'Start with a template or bring your own code' },
+  { id: 'harness', title: 'Harness (recommended)', description: 'Managed config-based agent loop, no code required' },
+  { id: 'agent', title: 'Agent', description: 'Start with a template or bring your own code hosted on AgentCore Runtime' },
   { id: 'skip', title: 'Skip', description: "I'll add resources later" },
 ];
 
@@ -205,7 +205,7 @@ function CreatedSummary({
           <Box marginLeft={2}>
             <Text>
               {harnessPath.padEnd(maxPathLen)}
-              <Text dimColor>{'  '}Harness (managed agent loop)</Text>
+              <Text dimColor>{'  '}Harness</Text>
             </Text>
           </Box>
         )}
