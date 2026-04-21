@@ -1,4 +1,5 @@
 import type { AgentCoreProjectSpec, NetworkMode } from '../../../schema';
+import { DEFAULT_EPISODIC_REFLECTION_NAMESPACES, DEFAULT_STRATEGY_NAMESPACES } from '../../../schema';
 import { HarnessPrimitive } from '../HarnessPrimitive';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -81,7 +82,7 @@ describe('HarnessPrimitive', () => {
 
       expect(mockWriteProjectSpec).toHaveBeenCalledWith(
         expect.objectContaining({
-          harnesses: [{ name: 'testHarness', path: './harnesses/testHarness' }],
+          harnesses: [{ name: 'testHarness', path: 'app/testHarness' }],
         })
       );
     });
@@ -101,7 +102,16 @@ describe('HarnessPrimitive', () => {
             expect.objectContaining({
               name: 'testHarnessMemory',
               eventExpiryDuration: 30,
-              strategies: [],
+              strategies: [
+                { type: 'SEMANTIC', namespaces: DEFAULT_STRATEGY_NAMESPACES['SEMANTIC'] },
+                { type: 'USER_PREFERENCE', namespaces: DEFAULT_STRATEGY_NAMESPACES['USER_PREFERENCE'] },
+                { type: 'SUMMARIZATION', namespaces: DEFAULT_STRATEGY_NAMESPACES['SUMMARIZATION'] },
+                {
+                  type: 'EPISODIC',
+                  namespaces: DEFAULT_STRATEGY_NAMESPACES['EPISODIC'],
+                  reflectionNamespaces: DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
+                },
+              ],
             }),
           ]),
         })

@@ -1,6 +1,10 @@
 import { APP_DIR, ConfigIO, findConfigRoot } from '../../lib';
-import type { HarnessModelProvider, HarnessSpec, NetworkMode } from '../../schema';
-import { HarnessSpecSchema } from '../../schema';
+import type { HarnessModelProvider, HarnessSpec, MemoryStrategy, MemoryStrategyType, NetworkMode } from '../../schema';
+import {
+  DEFAULT_EPISODIC_REFLECTION_NAMESPACES,
+  DEFAULT_STRATEGY_NAMESPACES,
+  HarnessSpecSchema,
+} from '../../schema';
 import { deleteHarness } from '../aws/agentcore-harness';
 import { getErrorMessage } from '../errors';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
@@ -112,10 +116,17 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       await writeFile(systemPromptPath, systemPromptContent, 'utf-8');
 
       if (memoryName) {
+        const strategyTypes: MemoryStrategyType[] = ['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION', 'EPISODIC'];
+        const strategies: MemoryStrategy[] = strategyTypes.map(type => ({
+          type,
+          ...(DEFAULT_STRATEGY_NAMESPACES[type] && { namespaces: DEFAULT_STRATEGY_NAMESPACES[type] }),
+          ...(type === 'EPISODIC' && { reflectionNamespaces: DEFAULT_EPISODIC_REFLECTION_NAMESPACES }),
+        }));
+
         project.memories.push({
           name: memoryName,
           eventExpiryDuration: DEFAULT_MEMORY_EXPIRY_DAYS,
-          strategies: [],
+          strategies,
         });
       }
 
