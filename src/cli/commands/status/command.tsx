@@ -9,6 +9,7 @@ import { Box, Text, render } from 'ink';
 
 const VALID_RESOURCE_TYPES = [
   'agent',
+  'harness',
   'memory',
   'credential',
   'gateway',
@@ -58,7 +59,7 @@ export const registerStatus = (program: Command) => {
     .option('--target <name>', 'Select deployment target')
     .option(
       '--type <type>',
-      'Filter by resource type (agent, memory, credential, gateway, evaluator, online-eval, policy-engine, policy)'
+      'Filter by resource type (agent, harness, memory, credential, gateway, evaluator, online-eval, policy-engine, policy)'
     )
     .option('--state <state>', 'Filter by deployment state (deployed, local-only, pending-removal)')
     .option('--runtime <name>', 'Filter to a specific runtime')
@@ -135,6 +136,7 @@ export const registerStatus = (program: Command) => {
 
         const filtered = filterResources(result.resources, cliOptions);
         const agents = filtered.filter(r => r.resourceType === 'agent');
+        const harnesses = filtered.filter(r => r.resourceType === 'harness');
         const credentials = filtered.filter(r => r.resourceType === 'credential');
         const memories = filtered.filter(r => r.resourceType === 'memory');
         const gateways = filtered.filter(r => r.resourceType === 'gateway');
@@ -162,6 +164,15 @@ export const registerStatus = (program: Command) => {
                       </Text>
                     )}
                   </Box>
+                ))}
+              </Box>
+            )}
+
+            {harnesses.length > 0 && (
+              <Box flexDirection="column" marginTop={1}>
+                <Text bold>Harnesses</Text>
+                {harnesses.map(entry => (
+                  <ResourceEntry key={`${entry.resourceType}-${entry.name}`} entry={entry} />
                 ))}
               </Box>
             )}

@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 const REMOVE_RESOURCES = [
   { id: 'agent', title: 'Agent', description: 'Remove an agent from the project' },
+  { id: 'harness', title: 'Harness', description: 'Remove a harness from the project' },
   { id: 'memory', title: 'Memory', description: 'Remove a memory provider' },
   { id: 'credential', title: 'Credential', description: 'Remove a credential' },
   { id: 'evaluator', title: 'Evaluator', description: 'Remove a custom evaluator' },
@@ -22,6 +23,8 @@ interface RemoveScreenProps {
   onExit: () => void;
   /** Number of agents available for removal */
   agentCount: number;
+  /** Number of harnesses available for removal */
+  harnessCount: number;
   /** Number of gateways available for removal */
   gatewayCount: number;
   /** Number of gateway targets available for removal */
@@ -44,6 +47,7 @@ export function RemoveScreen({
   onSelect,
   onExit,
   agentCount,
+  harnessCount,
   gatewayCount,
   mcpToolCount,
   memoryCount,
@@ -63,6 +67,12 @@ export function RemoveScreen({
           if (agentCount === 0) {
             disabled = true;
             description = 'No agents to remove';
+          }
+          break;
+        case 'harness':
+          if (harnessCount === 0) {
+            disabled = true;
+            description = 'No harnesses to remove';
           }
           break;
         case 'gateway':
@@ -122,6 +132,7 @@ export function RemoveScreen({
     });
   }, [
     agentCount,
+    harnessCount,
     gatewayCount,
     mcpToolCount,
     memoryCount,
