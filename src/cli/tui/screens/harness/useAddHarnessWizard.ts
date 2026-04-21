@@ -4,6 +4,7 @@ import { DEFAULT_MODEL_IDS } from './types';
 import { useCallback, useMemo, useState } from 'react';
 
 const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
+  'tools',
   'memory',
   'network',
   'lifecycle',
@@ -13,6 +14,7 @@ const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
 ];
 
 const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
+  tools: 'tools-select',
   memory: 'memory',
   network: 'network-mode',
   lifecycle: 'idle-timeout',
@@ -66,6 +68,16 @@ export function useAddHarnessWizard() {
 
     steps.push('advanced');
 
+    if (advancedSettings.includes('tools')) {
+      steps.push('tools-select');
+      if (config.selectedTools?.includes('remote_mcp')) {
+        steps.push('mcp-name', 'mcp-url');
+      }
+      if (config.selectedTools?.includes('agentcore_gateway')) {
+        steps.push('gateway-arn');
+      }
+    }
+
     if (advancedSettings.includes('memory')) {
       steps.push('memory');
     }
@@ -96,7 +108,7 @@ export function useAddHarnessWizard() {
     steps.push('confirm');
 
     return steps;
-  }, [config.modelProvider, config.containerMode, config.networkMode, advancedSettings]);
+  }, [config.modelProvider, config.containerMode, config.networkMode, config.selectedTools, advancedSettings]);
 
   const currentIndex = allSteps.indexOf(step);
 
@@ -175,6 +187,52 @@ export function useAddHarnessWizard() {
     const firstAdvancedStep = getFirstAdvancedStep(settings);
     setStep(firstAdvancedStep ?? 'confirm');
   }, []);
+
+  const setSelectedTools = useCallback(
+    (selectedTools: string[]) => {
+      setConfig(c => ({ ...c, selectedTools }));
+      if (selectedTools.includes('remote_mcp')) {
+        setStep('mcp-name');
+      } else if (selectedTools.includes('agentcore_gateway')) {
+        setStep('gateway-arn');
+      } else {
+        const next = getNextAdvancedStep(advancedSettings, 'tools');
+        setStep(next ?? 'confirm');
+      }
+    },
+    [advancedSettings]
+  );
+
+  const setMcpName = useCallback(
+    (mcpName: string) => {
+      setConfig(c => ({ ...c, mcpName }));
+      const next = nextStep('mcp-name');
+      if (next) setStep(next);
+    },
+    [nextStep]
+  );
+
+  const setMcpUrl = useCallback(
+    (mcpUrl: string) => {
+      setConfig(c => ({ ...c, mcpUrl }));
+      if (config.selectedTools?.includes('agentcore_gateway')) {
+        setStep('gateway-arn');
+      } else {
+        const next = getNextAdvancedStep(advancedSettings, 'tools');
+        setStep(next ?? 'confirm');
+      }
+    },
+    [advancedSettings, config.selectedTools]
+  );
+
+  const setGatewayArn = useCallback(
+    (gatewayArn: string) => {
+      setConfig(c => ({ ...c, gatewayArn }));
+      const next = getNextAdvancedStep(advancedSettings, 'tools');
+      setStep(next ?? 'confirm');
+    },
+    [advancedSettings]
+  );
 
   const setMemoryEnabled = useCallback(
     (enabled: boolean) => {
@@ -312,6 +370,10 @@ export function useAddHarnessWizard() {
     setContainerUri,
     setDockerfilePath,
     setAdvancedSettings,
+    setSelectedTools,
+    setMcpName,
+    setMcpUrl,
+    setGatewayArn,
     setMemoryEnabled,
     setNetworkMode,
     setSubnets,

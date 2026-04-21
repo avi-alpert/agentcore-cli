@@ -8,11 +8,12 @@ import {
 import { deleteHarness } from '../aws/agentcore-harness';
 import { getErrorMessage } from '../errors';
 import type { RemovalPreview, RemovalResult, SchemaChange } from '../operations/remove/types';
+import { getTemplatePath } from '../templates/templateRoot';
 import { DEFAULT_MEMORY_EXPIRY_DAYS } from '../tui/screens/generate/defaults';
 import { BasePrimitive } from './BasePrimitive';
 import type { AddResult, AddScreenComponent, RemovableResource } from './types';
 import type { Command } from '@commander-js/extra-typings';
-import { access, copyFile, mkdir, rm, writeFile } from 'fs/promises';
+import { access, copyFile, mkdir, readFile, rm, writeFile } from 'fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'path';
 
 export interface AddHarnessOptions {
@@ -34,6 +35,11 @@ export interface AddHarnessOptions {
   idleTimeout?: number;
   maxLifetime?: number;
   sessionStoragePath?: string;
+  withInvokeScript?: boolean;
+  selectedTools?: string[];
+  mcpName?: string;
+  mcpUrl?: string;
+  gatewayArn?: string;
   configBaseDir?: string;
 }
 
@@ -77,6 +83,29 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
         dockerfile = destFilename;
       }
 
+      const tools: HarnessSpec['tools'] = [];
+      if (options.selectedTools) {
+        for (const toolType of options.selectedTools) {
+          if (toolType === 'agentcore_browser') {
+            tools.push({ type: 'agentcore_browser', name: 'browser' });
+          } else if (toolType === 'agentcore_code_interpreter') {
+            tools.push({ type: 'agentcore_code_interpreter', name: 'code-interpreter' });
+          } else if (toolType === 'remote_mcp' && options.mcpName && options.mcpUrl) {
+            tools.push({
+              type: 'remote_mcp',
+              name: options.mcpName,
+              config: { remoteMcp: { url: options.mcpUrl } },
+            });
+          } else if (toolType === 'agentcore_gateway' && options.gatewayArn) {
+            tools.push({
+              type: 'agentcore_gateway',
+              name: 'gateway',
+              config: { agentCoreGateway: { gatewayArn: options.gatewayArn } },
+            });
+          }
+        }
+      }
+
       const harnessSpec: HarnessSpec = {
         name: options.name,
         model: {
@@ -84,7 +113,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           modelId: options.modelId,
           ...(options.apiKeyArn && { apiKeyArn: options.apiKeyArn }),
         },
-        tools: [],
+        tools,
         skills: [],
         ...(options.systemPrompt && { systemPrompt: options.systemPrompt }),
         ...(memoryName && { memory: { name: memoryName } }),
@@ -114,6 +143,15 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       const systemPromptPath = join(harnessDir, 'system-prompt.md');
       const systemPromptContent = options.systemPrompt ?? 'You are a helpful assistant';
       await writeFile(systemPromptPath, systemPromptContent, 'utf-8');
+
+      if (options.withInvokeScript) {
+        const templatePath = getTemplatePath('harness', 'invoke.py.template');
+        const invokeScriptPath = join(harnessDir, 'invoke.py');
+        let template = await readFile(templatePath, 'utf-8');
+        template = template.replace('{{HARNESS_ARN}}', '<your-harness-arn>');
+        template = template.replace('{{REGION}}', '<your-region>');
+        await writeFile(invokeScriptPath, template, 'utf-8');
+      }
 
       if (memoryName) {
         const strategyTypes: MemoryStrategyType[] = ['SEMANTIC', 'USER_PREFERENCE', 'SUMMARIZATION', 'EPISODIC'];
@@ -256,6 +294,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       .option('--idle-timeout <seconds>', 'Idle timeout in seconds', parseInt)
       .option('--max-lifetime <seconds>', 'Max lifetime in seconds', parseInt)
       .option('--session-storage <path>', 'Mount path for persistent session storage (e.g., /mnt/data/)')
+      .option('--with-invoke-script', 'Generate a standalone Python invoke script')
       .option('--json', 'Output as JSON')
       .action(
         async (cliOptions: {
@@ -275,6 +314,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           idleTimeout?: number;
           maxLifetime?: number;
           sessionStorage?: string;
+          withInvokeScript?: boolean;
           json?: boolean;
         }) => {
           try {
@@ -318,6 +358,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
                 idleTimeout: cliOptions.idleTimeout,
                 maxLifetime: cliOptions.maxLifetime,
                 sessionStoragePath: cliOptions.sessionStorage,
+                withInvokeScript: cliOptions.withInvokeScript,
               });
 
               if (!result.success) {

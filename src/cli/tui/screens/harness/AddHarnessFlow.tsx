@@ -64,6 +64,10 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
         idleTimeout: config.idleTimeout,
         maxLifetime: config.maxLifetime,
         sessionStoragePath: config.sessionStoragePath,
+        selectedTools: config.selectedTools,
+        mcpName: config.mcpName,
+        mcpUrl: config.mcpUrl,
+        gatewayArn: config.gatewayArn,
       });
       if (!result.success) {
         setFlow({ name: 'error', message: result.error });

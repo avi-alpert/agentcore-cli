@@ -23,6 +23,7 @@ import {
   MEMORY_OPTIONS,
   MODEL_PROVIDER_OPTIONS,
   NETWORK_MODE_OPTIONS,
+  TOOL_SELECT_OPTIONS,
   TRUNCATION_STRATEGY_OPTIONS,
 } from './types';
 import { useAddHarnessWizard } from './useAddHarnessWizard';
@@ -52,6 +53,11 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     []
   );
 
+  const toolSelectItems: SelectableItem[] = useMemo(
+    () => TOOL_SELECT_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
+    []
+  );
+
   const memoryItems: SelectableItem[] = useMemo(
     () => MEMORY_OPTIONS.map(opt => ({ id: opt.id, title: opt.title, description: opt.description })),
     []
@@ -74,6 +80,10 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
   const isContainerUriStep = wizard.step === 'container-uri';
   const isContainerDockerfileStep = wizard.step === 'container-dockerfile';
   const isAdvancedStep = wizard.step === 'advanced';
+  const isToolsSelectStep = wizard.step === 'tools-select';
+  const isMcpNameStep = wizard.step === 'mcp-name';
+  const isMcpUrlStep = wizard.step === 'mcp-url';
+  const isGatewayArnStep = wizard.step === 'gateway-arn';
   const isMemoryStep = wizard.step === 'memory';
   const isNetworkModeStep = wizard.step === 'network-mode';
   const isSubnetsStep = wizard.step === 'subnets';
@@ -110,6 +120,15 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     requireSelection: false,
   });
 
+  const toolsSelectNav = useMultiSelectNavigation({
+    items: toolSelectItems,
+    getId: item => item.id,
+    onConfirm: ids => wizard.setSelectedTools(ids),
+    onExit: () => wizard.goBack(),
+    isActive: isToolsSelectStep,
+    requireSelection: false,
+  });
+
   const memoryNav = useListNavigation({
     items: memoryItems,
     onSelect: item => wizard.setMemoryEnabled(item.id === 'enabled'),
@@ -138,13 +157,14 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
     isActive: isConfirmStep,
   });
 
-  const helpText = isAdvancedStep
-    ? 'Space toggle · Enter confirm · Esc back'
-    : isModelProviderStep || isMemoryStep || isContainerStep || isNetworkModeStep || isTruncationStrategyStep
-      ? HELP_TEXT.NAVIGATE_SELECT
-      : isConfirmStep
-        ? HELP_TEXT.CONFIRM_CANCEL
-        : HELP_TEXT.TEXT_INPUT;
+  const helpText =
+    isAdvancedStep || isToolsSelectStep
+      ? 'Space toggle · Enter confirm · Esc back'
+      : isModelProviderStep || isMemoryStep || isContainerStep || isNetworkModeStep || isTruncationStrategyStep
+        ? HELP_TEXT.NAVIGATE_SELECT
+        : isConfirmStep
+          ? HELP_TEXT.CONFIRM_CANCEL
+          : HELP_TEXT.TEXT_INPUT;
 
   const headerContent = <StepIndicator steps={wizard.steps} currentStep={wizard.step} labels={HARNESS_STEP_LABELS} />;
 
@@ -285,10 +305,55 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
         {isAdvancedStep && (
           <WizardMultiSelect
             title="Advanced settings (optional)"
-            description="Configure memory, network, lifecycle, execution limits, truncation, or session storage"
+            description="Configure tools, memory, network, lifecycle, execution limits, truncation, or session storage"
             items={advancedSettingItems}
             cursorIndex={advancedSettingsNav.cursorIndex}
             selectedIds={advancedSettingsNav.selectedIds}
+          />
+        )}
+
+        {isToolsSelectStep && (
+          <WizardMultiSelect
+            title="Select tools for your harness"
+            description="Choose built-in tools, MCP servers, or gateways"
+            items={toolSelectItems}
+            cursorIndex={toolsSelectNav.cursorIndex}
+            selectedIds={toolsSelectNav.selectedIds}
+          />
+        )}
+
+        {isMcpNameStep && (
+          <TextInput
+            key="mcp-name"
+            prompt="MCP server name"
+            initialValue=""
+            onSubmit={wizard.setMcpName}
+            onCancel={() => wizard.goBack()}
+            customValidation={value => (value.trim().length > 0 ? true : 'MCP name is required')}
+          />
+        )}
+
+        {isMcpUrlStep && (
+          <TextInput
+            key="mcp-url"
+            prompt="MCP server URL"
+            initialValue=""
+            onSubmit={wizard.setMcpUrl}
+            onCancel={() => wizard.goBack()}
+            customValidation={value =>
+              value.startsWith('http://') || value.startsWith('https://') ? true : 'Must be a valid URL'
+            }
+          />
+        )}
+
+        {isGatewayArnStep && (
+          <TextInput
+            key="gateway-arn"
+            prompt="Gateway ARN"
+            initialValue=""
+            onSubmit={wizard.setGatewayArn}
+            onCancel={() => wizard.goBack()}
+            customValidation={value => (isValidArn(value) ? true : ARN_VALIDATION_MESSAGE)}
           />
         )}
 

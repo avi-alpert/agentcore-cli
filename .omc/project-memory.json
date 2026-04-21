@@ -1,0 +1,535 @@
+{
+  "version": "1.0.0",
+  "lastScanned": 1776712902551,
+  "projectRoot": "/Volumes/workplace/agentcore/agentcore-gh/private/private-agentcore-cli-staging",
+  "techStack": {
+    "languages": [
+      {
+        "name": "JavaScript/TypeScript",
+        "version": ">=20",
+        "confidence": "high",
+        "markers": [
+          "package.json"
+        ]
+      },
+      {
+        "name": "TypeScript",
+        "version": null,
+        "confidence": "high",
+        "markers": [
+          "tsconfig.json"
+        ]
+      }
+    ],
+    "frameworks": [
+      {
+        "name": "react",
+        "version": "19.2.3",
+        "category": "frontend"
+      },
+      {
+        "name": "esbuild",
+        "version": "0.27.2",
+        "category": "build"
+      },
+      {
+        "name": "vitest",
+        "version": "4.0.18",
+        "category": "testing"
+      }
+    ],
+    "packageManager": "npm",
+    "runtime": "Node.js 20"
+  },
+  "build": {
+    "buildCommand": "npm run build",
+    "testCommand": "npm test",
+    "lintCommand": "npm run lint",
+    "devCommand": null,
+    "scripts": {
+      "postinstall": "node scripts/check-old-cli.mjs",
+      "build": "npm run build:lib && npm run build:cli && npm run build:assets",
+      "build:schema": "node scripts/generate-schema.mjs && prettier --write schemas/",
+      "build:lib": "tsc -p tsconfig.build.json",
+      "build:cli": "node esbuild.config.mjs",
+      "build:assets": "node scripts/copy-assets.mjs",
+      "build:harness": "BUILD_HARNESS=1 node esbuild.config.mjs",
+      "cli": "npx tsx src/cli/index.ts",
+      "typecheck": "tsc --noEmit",
+      "lint": "eslint src/",
+      "lint:fix": "eslint src/ --fix",
+      "format": "prettier --write .",
+      "format:check": "prettier --check .",
+      "secrets:check": "secretlint '**/*'",
+      "security:audit": "npm audit --audit-level=high --omit=dev",
+      "clean": "node -e \"require('fs').rmSync('dist', {recursive: true, force: true})\"",
+      "prepare": "husky",
+      "test": "vitest run --project unit",
+      "test:all": "vitest run",
+      "test:watch": "vitest --project unit",
+      "test:integ": "vitest run --project integ",
+      "test:unit": "vitest run --project unit --coverage",
+      "test:e2e": "vitest run --project e2e",
+      "test:update-snapshots": "vitest run --project unit --update",
+      "test:tui": "npm run build:harness && vitest run --project tui",
+      "bundle": "node scripts/bundle.mjs"
+    }
+  },
+  "conventions": {
+    "namingStyle": null,
+    "importStyle": null,
+    "testPattern": null,
+    "fileOrganization": null
+  },
+  "structure": {
+    "isMonorepo": false,
+    "workspaces": [],
+    "mainDirectories": [
+      "docs",
+      "scripts",
+      "src"
+    ],
+    "gitBranches": {
+      "defaultBranch": "main",
+      "branchingStrategy": null
+    }
+  },
+  "customNotes": [],
+  "directoryMap": {
+    "dist": {
+      "path": "dist",
+      "purpose": "Distribution/build output",
+      "fileCount": 4,
+      "lastAccessed": 1776712902476,
+      "keyFiles": [
+        "index.d.ts",
+        "index.d.ts.map",
+        "index.js",
+        "index.js.map"
+      ]
+    },
+    "docs": {
+      "path": "docs",
+      "purpose": "Documentation",
+      "fileCount": 15,
+      "lastAccessed": 1776712902476,
+      "keyFiles": [
+        "PERMISSIONS.md",
+        "TESTING.md",
+        "commands.md",
+        "configuration.md",
+        "container-builds.md"
+      ]
+    },
+    "e2e-tests": {
+      "path": "e2e-tests",
+      "purpose": null,
+      "fileCount": 17,
+      "lastAccessed": 1776712902484,
+      "keyFiles": [
+        "byo-custom-jwt.test.ts",
+        "container-strands-bedrock.test.ts",
+        "dev-lifecycle.test.ts",
+        "e2e-helper.ts",
+        "evals-lifecycle.test.ts"
+      ]
+    },
+    "integ-tests": {
+      "path": "integ-tests",
+      "purpose": null,
+      "fileCount": 19,
+      "lastAccessed": 1776712902485,
+      "keyFiles": [
+        "README.md",
+        "add-agent-auth.test.ts",
+        "add-remove-evaluator.test.ts",
+        "add-remove-gateway.test.ts",
+        "add-remove-policy.test.ts"
+      ]
+    },
+    "schemas": {
+      "path": "schemas",
+      "purpose": "Schema definitions",
+      "fileCount": 2,
+      "lastAccessed": 1776712902486,
+      "keyFiles": [
+        "README.md",
+        "agentcore.schema.v1.json"
+      ]
+    },
+    "scripts": {
+      "path": "scripts",
+      "purpose": "Build/utility scripts",
+      "fileCount": 7,
+      "lastAccessed": 1776712902487,
+      "keyFiles": [
+        "bump-version.ts",
+        "bundle.mjs",
+        "check-old-cli.lib.mjs",
+        "check-old-cli.mjs",
+        "copy-assets.mjs"
+      ]
+    },
+    "src": {
+      "path": "src",
+      "purpose": "Source code",
+      "fileCount": 1,
+      "lastAccessed": 1776712902488,
+      "keyFiles": [
+        "index.ts"
+      ]
+    },
+    "dist/assets": {
+      "path": "dist/assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1776712902489,
+      "keyFiles": [
+        "README.md",
+        "bundled-agentcore-cdk.tgz"
+      ]
+    },
+    "dist/lib": {
+      "path": "dist/lib",
+      "purpose": "Library code",
+      "fileCount": 8,
+      "lastAccessed": 1776712902490,
+      "keyFiles": [
+        "constants.d.ts",
+        "constants.d.ts.map",
+        "constants.js"
+      ]
+    },
+    "e2e-tests/fixtures": {
+      "path": "e2e-tests/fixtures",
+      "purpose": "Test fixtures",
+      "fileCount": 0,
+      "lastAccessed": 1776712902492,
+      "keyFiles": []
+    },
+    "src/assets": {
+      "path": "src/assets",
+      "purpose": "Static assets",
+      "fileCount": 2,
+      "lastAccessed": 1776712902493,
+      "keyFiles": [
+        "AGENTS.md",
+        "README.md"
+      ]
+    },
+    "src/lib": {
+      "path": "src/lib",
+      "purpose": "Library code",
+      "fileCount": 3,
+      "lastAccessed": 1776712902494,
+      "keyFiles": [
+        "AGENTS.md",
+        "constants.ts",
+        "index.ts"
+      ]
+    }
+  },
+  "hotPaths": [
+    {
+      "path": "src/cli/primitives/HarnessPrimitive.ts",
+      "accessCount": 54,
+      "lastAccessed": 1776789175806,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/invoke/action.ts",
+      "accessCount": 50,
+      "lastAccessed": 1776734775763,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/tui/screens/harness/AddHarnessScreen.tsx",
+      "accessCount": 30,
+      "lastAccessed": 1776789106583,
+      "type": "file"
+    },
+    {
+      "path": "",
+      "accessCount": 28,
+      "lastAccessed": 1776788406794,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/tui/screens/harness/useAddHarnessWizard.ts",
+      "accessCount": 26,
+      "lastAccessed": 1776789090341,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/status/action.ts",
+      "accessCount": 25,
+      "lastAccessed": 1776717978620,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/traces/action.ts",
+      "accessCount": 21,
+      "lastAccessed": 1776721322435,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/tui/screens/harness/types.ts",
+      "accessCount": 21,
+      "lastAccessed": 1776789075738,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/action.ts",
+      "accessCount": 15,
+      "lastAccessed": 1776721300318,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/resolve-agent.ts",
+      "accessCount": 13,
+      "lastAccessed": 1776721674004,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/deploy/imperative/deployers/harness-mapper.ts",
+      "accessCount": 13,
+      "lastAccessed": 1776752819965,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/aws/agentcore-harness.ts",
+      "accessCount": 11,
+      "lastAccessed": 1776752852122,
+      "type": "directory"
+    },
+    {
+      "path": "src",
+      "accessCount": 10,
+      "lastAccessed": 1776753089805,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/tui/components/ResourceGraph.tsx",
+      "accessCount": 8,
+      "lastAccessed": 1776713938346,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/cli.ts",
+      "accessCount": 8,
+      "lastAccessed": 1776723265039,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/deploy/imperative/deployers/harness-deployer.ts",
+      "accessCount": 8,
+      "lastAccessed": 1776751232130,
+      "type": "directory"
+    },
+    {
+      "path": "src/schema/schemas/primitives/harness.ts",
+      "accessCount": 7,
+      "lastAccessed": 1776752820021,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/__tests__/action.test.ts",
+      "accessCount": 6,
+      "lastAccessed": 1776721368975,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/traces/command.tsx",
+      "accessCount": 5,
+      "lastAccessed": 1776718924174,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/command.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1776718924108,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/aws/api-client.ts",
+      "accessCount": 4,
+      "lastAccessed": 1776727855708,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/tui/screens/harness/AddHarnessFlow.tsx",
+      "accessCount": 4,
+      "lastAccessed": 1776747406522,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/traces/types.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776718023702,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/types.ts",
+      "accessCount": 3,
+      "lastAccessed": 1776718028009,
+      "type": "file"
+    },
+    {
+      "path": "src/assets/cdk/test/cdk.test.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776715417470,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/traces/trace-url.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776717938829,
+      "type": "file"
+    },
+    {
+      "path": "src/schema/schemas/deployed-state.ts",
+      "accessCount": 2,
+      "lastAccessed": 1776719541306,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/add/command.tsx",
+      "accessCount": 2,
+      "lastAccessed": 1776722891394,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/tui/screens/status/StatusScreen.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776713208158,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/tui/screens/status/useStatusFlow.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776713208232,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/traces/index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717796322,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717802272,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/aws/cloudwatch.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717805794,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/traces/list-traces.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717812340,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/traces/get-trace.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717812407,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/traces/index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717815717,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/logs/filter-pattern.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717822615,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/constants.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717822673,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/aws/account.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717825848,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/eval/logs-eval.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717831686,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/operations/eval/index.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717831753,
+      "type": "file"
+    },
+    {
+      "path": "src/schema/schemas/agentcore-project.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776717938879,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/tui/screens/add/AddScreen.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776722389411,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/remove/command.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776722389473,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/add/validate.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776722396725,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/commands/add/types.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776722399640,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/primitives/BasePrimitive.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776722403057,
+      "type": "file"
+    },
+    {
+      "path": "src/cli/tui/screens/add/AddFlow.tsx",
+      "accessCount": 1,
+      "lastAccessed": 1776722406129,
+      "type": "file"
+    },
+    {
+      "path": "src/lib/schemas/io/config-io.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776722876988,
+      "type": "directory"
+    },
+    {
+      "path": "src/cli/primitives/registry.ts",
+      "accessCount": 1,
+      "lastAccessed": 1776722885163,
+      "type": "file"
+    }
+  ],
+  "userDirectives": []
+}

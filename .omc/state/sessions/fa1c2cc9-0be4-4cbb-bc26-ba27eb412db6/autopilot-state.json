@@ -1,0 +1,10 @@
+{
+  "active": true,
+  "started_at": "2026-04-17T06:40:09.084Z",
+  "original_prompt": "I want a simple, human like PR descirption, dont post just gimme text",
+  "session_id": "fa1c2cc9-0be4-4cbb-bc26-ba27eb412db6",
+  "project_path": "/Volumes/workplace/agentcore/agentcore-gh/private/private-agentcore-cli-staging",
+  "reinforcement_count": 0,
+  "awaiting_confirmation": true,
+  "last_checked_at": "2026-04-17T06:40:09.087Z"
+}

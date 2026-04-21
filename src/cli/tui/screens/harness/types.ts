@@ -10,6 +10,10 @@ export type AddHarnessStep =
   | 'container-uri'
   | 'container-dockerfile'
   | 'advanced'
+  | 'tools-select'
+  | 'mcp-name'
+  | 'mcp-url'
+  | 'gateway-arn'
   | 'memory'
   | 'network-mode'
   | 'subnets'
@@ -42,6 +46,10 @@ export interface AddHarnessConfig {
   idleTimeout?: number;
   maxLifetime?: number;
   sessionStoragePath?: string;
+  selectedTools?: string[];
+  mcpName?: string;
+  mcpUrl?: string;
+  gatewayArn?: string;
 }
 
 export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
@@ -52,6 +60,10 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   'container-uri': 'Container URI',
   'container-dockerfile': 'Dockerfile path',
   advanced: 'Advanced settings',
+  'tools-select': 'Tools',
+  'mcp-name': 'MCP name',
+  'mcp-url': 'MCP URL',
+  'gateway-arn': 'Gateway ARN',
   memory: 'Memory',
   'network-mode': 'Network mode',
   subnets: 'Subnets',
@@ -84,6 +96,7 @@ export const TRUNCATION_STRATEGY_OPTIONS = [
 ] as const;
 
 export const ADVANCED_SETTING_OPTIONS = [
+  { id: 'tools', title: 'Tools', description: 'Browser, Code Interpreter, Remote MCP, Gateway' },
   { id: 'memory', title: 'Memory', description: 'Enable or disable persistent memory' },
   { id: 'network', title: 'Network', description: 'VPC configuration' },
   { id: 'lifecycle', title: 'Lifecycle', description: 'Idle timeout and max lifetime' },
@@ -107,6 +120,13 @@ export const CONTAINER_MODE_OPTIONS = [
   { id: 'none' as const, title: 'None', description: 'Use the default managed runtime' },
   { id: 'uri' as const, title: 'Container URI', description: 'Use a pre-built container image (ECR URI)' },
   { id: 'dockerfile' as const, title: 'Dockerfile', description: 'Build from a Dockerfile' },
+] as const;
+
+export const TOOL_SELECT_OPTIONS = [
+  { id: 'agentcore_browser' as const, title: 'Browser', description: 'Web browsing and automation' },
+  { id: 'agentcore_code_interpreter' as const, title: 'Code Interpreter', description: 'Sandboxed code execution' },
+  { id: 'remote_mcp' as const, title: 'Remote MCP Server', description: 'Connect to an MCP server' },
+  { id: 'agentcore_gateway' as const, title: 'AgentCore Gateway', description: 'Connect via gateway' },
 ] as const;
 
 export const NETWORK_MODE_OPTIONS = [
