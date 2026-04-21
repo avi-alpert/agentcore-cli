@@ -63,6 +63,7 @@ export function AddHarnessFlow({ isInteractive = true, onExit, onBack, onDev, on
         securityGroups: config.securityGroups,
         idleTimeout: config.idleTimeout,
         maxLifetime: config.maxLifetime,
+        sessionStoragePath: config.sessionStoragePath,
       });
       if (!result.success) {
         setFlow({ name: 'error', message: result.error });

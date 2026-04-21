@@ -29,6 +29,7 @@ export interface AddHarnessOptions {
   securityGroups?: string[];
   idleTimeout?: number;
   maxLifetime?: number;
+  sessionStoragePath?: string;
   configBaseDir?: string;
 }
 
@@ -99,6 +100,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
             },
           }),
         ...(this.buildLifecycleConfig(options) && { lifecycleConfig: this.buildLifecycleConfig(options) }),
+        ...(options.sessionStoragePath && { sessionStoragePath: options.sessionStoragePath }),
       };
 
       await configIO.writeHarnessSpec(options.name, harnessSpec);
@@ -242,6 +244,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       .option('--security-groups <ids>', 'Comma-separated security group IDs (for VPC mode)')
       .option('--idle-timeout <seconds>', 'Idle timeout in seconds', parseInt)
       .option('--max-lifetime <seconds>', 'Max lifetime in seconds', parseInt)
+      .option('--session-storage <path>', 'Mount path for persistent session storage (e.g., /mnt/data/)')
       .option('--json', 'Output as JSON')
       .action(
         async (cliOptions: {
@@ -260,6 +263,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           securityGroups?: string;
           idleTimeout?: number;
           maxLifetime?: number;
+          sessionStorage?: string;
           json?: boolean;
         }) => {
           try {
@@ -302,6 +306,7 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
                 securityGroups: cliOptions.securityGroups?.split(',').map(s => s.trim()),
                 idleTimeout: cliOptions.idleTimeout,
                 maxLifetime: cliOptions.maxLifetime,
+                sessionStoragePath: cliOptions.sessionStorage,
               });
 
               if (!result.success) {

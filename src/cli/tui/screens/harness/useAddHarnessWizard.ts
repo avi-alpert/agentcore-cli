@@ -3,7 +3,14 @@ import type { AddHarnessConfig, AddHarnessStep, AdvancedSetting, ContainerMode }
 import { DEFAULT_MODEL_IDS } from './types';
 import { useCallback, useMemo, useState } from 'react';
 
-const ADVANCED_SETTING_ORDER: AdvancedSetting[] = ['memory', 'network', 'lifecycle', 'execution', 'truncation'];
+const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
+  'memory',
+  'network',
+  'lifecycle',
+  'execution',
+  'truncation',
+  'session-storage',
+];
 
 const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
   memory: 'memory',
@@ -11,6 +18,7 @@ const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
   lifecycle: 'idle-timeout',
   execution: 'max-iterations',
   truncation: 'truncation-strategy',
+  'session-storage': 'session-storage-path',
 };
 
 function getFirstAdvancedStep(settings: AdvancedSetting[]): AddHarnessStep | undefined {
@@ -79,6 +87,10 @@ export function useAddHarnessWizard() {
 
     if (advancedSettings.includes('truncation')) {
       steps.push('truncation-strategy');
+    }
+
+    if (advancedSettings.includes('session-storage')) {
+      steps.push('session-storage-path');
     }
 
     steps.push('confirm');
@@ -271,6 +283,15 @@ export function useAddHarnessWizard() {
     [nextStep]
   );
 
+  const setSessionStoragePath = useCallback(
+    (sessionStoragePath: string) => {
+      setConfig(c => ({ ...c, sessionStoragePath }));
+      const next = nextStep('session-storage-path');
+      if (next) setStep(next);
+    },
+    [nextStep]
+  );
+
   const reset = useCallback(() => {
     setConfig(getDefaultConfig());
     setStep('name');
@@ -301,6 +322,7 @@ export function useAddHarnessWizard() {
     setMaxTokens,
     setTimeoutSeconds,
     setTruncationStrategy,
+    setSessionStoragePath,
     reset,
   };
 }

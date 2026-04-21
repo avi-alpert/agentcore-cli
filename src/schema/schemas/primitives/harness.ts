@@ -232,6 +232,7 @@ export const HarnessSpecSchema = z
     networkMode: NetworkModeSchema.optional(),
     networkConfig: NetworkConfigSchema.optional(),
     lifecycleConfig: LifecycleConfigurationSchema.optional(),
+    sessionStoragePath: z.string().min(1).optional(),
     environmentVariables: z.record(z.string(), z.string()).optional(),
     tags: TagsSchema.optional(),
   })

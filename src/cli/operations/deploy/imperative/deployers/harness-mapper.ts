@@ -320,8 +320,9 @@ function mapEnvironmentArtifact(containerUri: string): HarnessEnvironmentArtifac
 function mapEnvironmentProvider(spec: HarnessSpec): HarnessEnvironmentProvider | undefined {
   const hasNetwork = !!spec.networkConfig;
   const hasLifecycle = !!spec.lifecycleConfig;
+  const hasSessionStorage = !!spec.sessionStoragePath;
 
-  if (!hasNetwork && !hasLifecycle) {
+  if (!hasNetwork && !hasLifecycle && !hasSessionStorage) {
     return undefined;
   }
 
@@ -336,6 +337,10 @@ function mapEnvironmentProvider(spec: HarnessSpec): HarnessEnvironmentProvider |
 
   if (spec.lifecycleConfig) {
     agentCoreRuntimeEnvironment.lifecycleConfiguration = spec.lifecycleConfig;
+  }
+
+  if (spec.sessionStoragePath) {
+    agentCoreRuntimeEnvironment.filesystemConfigurations = [{ sessionStorage: { mountPath: spec.sessionStoragePath } }];
   }
 
   return {

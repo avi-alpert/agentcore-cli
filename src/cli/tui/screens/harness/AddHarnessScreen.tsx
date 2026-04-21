@@ -84,6 +84,7 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
   const isMaxTokensStep = wizard.step === 'max-tokens';
   const isTimeoutStep = wizard.step === 'timeout';
   const isTruncationStrategyStep = wizard.step === 'truncation-strategy';
+  const isSessionStoragePathStep = wizard.step === 'session-storage-path';
   const isConfirmStep = wizard.step === 'confirm';
 
   const modelProviderNav = useListNavigation({
@@ -284,7 +285,7 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
         {isAdvancedStep && (
           <WizardMultiSelect
             title="Advanced settings (optional)"
-            description="Configure memory, network, lifecycle, execution limits, or truncation"
+            description="Configure memory, network, lifecycle, execution limits, truncation, or session storage"
             items={advancedSettingItems}
             cursorIndex={advancedSettingsNav.cursorIndex}
             selectedIds={advancedSettingsNav.selectedIds}
@@ -411,6 +412,17 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
             description="How to manage context when it exceeds limits"
             items={truncationStrategyItems}
             selectedIndex={truncationStrategyNav.selectedIndex}
+          />
+        )}
+
+        {isSessionStoragePathStep && (
+          <TextInput
+            key="session-storage-path"
+            prompt="Session storage mount path (e.g., /mnt/data/)"
+            initialValue="/mnt/data/"
+            onSubmit={wizard.setSessionStoragePath}
+            onCancel={() => wizard.goBack()}
+            customValidation={value => (value.startsWith('/') ? true : 'Must be an absolute path')}
           />
         )}
 

@@ -20,6 +20,7 @@ export type AddHarnessStep =
   | 'max-tokens'
   | 'timeout'
   | 'truncation-strategy'
+  | 'session-storage-path'
   | 'confirm';
 
 export interface AddHarnessConfig {
@@ -40,6 +41,7 @@ export interface AddHarnessConfig {
   securityGroups?: string[];
   idleTimeout?: number;
   maxLifetime?: number;
+  sessionStoragePath?: string;
 }
 
 export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
@@ -60,6 +62,7 @@ export const HARNESS_STEP_LABELS: Record<AddHarnessStep, string> = {
   'max-tokens': 'Max tokens',
   timeout: 'Timeout',
   'truncation-strategy': 'Truncation',
+  'session-storage-path': 'Session storage path',
   confirm: 'Confirm',
 };
 
@@ -86,6 +89,7 @@ export const ADVANCED_SETTING_OPTIONS = [
   { id: 'lifecycle', title: 'Lifecycle', description: 'Idle timeout and max lifetime' },
   { id: 'execution', title: 'Execution limits', description: 'Iterations, tokens, timeout' },
   { id: 'truncation', title: 'Truncation', description: 'Context management strategy' },
+  { id: 'session-storage', title: 'Session Storage', description: 'Persistent storage mount path' },
 ] as const;
 
 export type AdvancedSetting = (typeof ADVANCED_SETTING_OPTIONS)[number]['id'];
