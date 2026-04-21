@@ -1,5 +1,5 @@
 /**
- * bundle.mjs — Single command to build CLI + CDK constructs into one tarball.
+ * bundle.mjs — Single command to build CLI + CDK constructs + frontend into one tarball.
  *
  * This is a testing-only workflow. It does NOT modify the default build or
  * deployment flow. The normal `npm run build` + `npm pack` pipeline is unchanged.
@@ -9,12 +9,16 @@
  * At `agentcore create` time, CDKRenderer detects this tarball and installs it
  * after the normal `npm install`, overriding the registry version.
  *
+ * It also builds the @aws/agent-inspector frontend and copies its dist-assets
+ * into the CLI's dist/agent-inspector/ directory, overriding the npm registry version.
+ *
  * Usage:
  *   node scripts/bundle.mjs
  *   npm run bundle
  *
  * Environment variables:
- *   AGENTCORE_CDK_PATH — absolute path to the agentcore-l3-cdk-constructs repo
+ *   AGENTCORE_CDK_PATH       — absolute path to the agentcore-l3-cdk-constructs repo
+ *   AGENT_INSPECTOR_PATH     — absolute path to the agent-inspector repo
  */
 import { execFileSync } from 'node:child_process';
 import * as fs from 'node:fs';
@@ -73,6 +77,30 @@ function resolveCdkPath() {
   }
 
   return cloneDir;
+}
+
+/**
+ * Resolve the agent-inspector repo path. Priority:
+ * 1. AGENT_INSPECTOR_PATH env var
+ * 2. Sibling directory ../agent-inspector
+ */
+function resolveInspectorPath() {
+  if (process.env.AGENT_INSPECTOR_PATH) {
+    const p = path.resolve(process.env.AGENT_INSPECTOR_PATH);
+    if (fs.existsSync(path.join(p, 'package.json'))) {
+      log(`Using agent-inspector from AGENT_INSPECTOR_PATH: ${p}`);
+      return p;
+    }
+    console.warn(`  WARNING: AGENT_INSPECTOR_PATH=${p} does not contain package.json, ignoring.`);
+  }
+
+  const sibling = path.resolve(cliRoot, '..', 'agent-inspector');
+  if (fs.existsSync(path.join(sibling, 'package.json'))) {
+    log(`Using agent-inspector from sibling directory: ${sibling}`);
+    return sibling;
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -141,7 +169,33 @@ const bundledTarballDest = path.join(cliRoot, 'dist', 'assets', 'bundled-agentco
 fs.copyFileSync(cdkTarballSrc, bundledTarballDest);
 log(`Placed CDK tarball at ${bundledTarballDest}`);
 
-// Step 5: Bump CLI version and pack into final tarball (includes the bundled CDK tarball)
+// Step 5: Build and bundle agent-inspector frontend (overrides the npm version)
+const inspectorPath = resolveInspectorPath();
+if (inspectorPath) {
+  log('Installing agent-inspector dependencies...');
+  run('npm', ['install'], { cwd: inspectorPath });
+
+  log('Building agent-inspector...');
+  run('npm', ['run', 'build'], { cwd: inspectorPath });
+
+  const inspectorDistSrc = path.join(inspectorPath, 'dist-assets');
+  const inspectorDistDest = path.join(cliRoot, 'dist', 'agent-inspector');
+
+  if (fs.existsSync(inspectorDistSrc)) {
+    if (fs.existsSync(inspectorDistDest)) {
+      fs.rmSync(inspectorDistDest, { recursive: true });
+    }
+    fs.cpSync(inspectorDistSrc, inspectorDistDest, { recursive: true });
+    log(`Copied agent-inspector frontend to ${inspectorDistDest}`);
+  } else {
+    console.error(`ERROR: agent-inspector build did not produce dist-assets/ at ${inspectorDistSrc}`);
+    process.exit(1);
+  }
+} else {
+  log('No local agent-inspector found — using npm registry version.');
+}
+
+// Step 6: Bump CLI version and pack into final tarball (includes the bundled CDK tarball + frontend)
 const cliVersionInfo = bumpVersion(cliRoot);
 try {
   log('Packing CLI tarball...');

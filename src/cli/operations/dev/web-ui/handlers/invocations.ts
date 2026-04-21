@@ -1,4 +1,5 @@
 import { extractSSEEventText, extractTaskText, isStatusUpdateEvent } from '../../invoke-a2a';
+import { handleHarnessInvocation } from './harness-invocation';
 import type { RouteContext } from './route-context';
 import { randomUUID } from 'node:crypto';
 import { type IncomingMessage, type ServerResponse, request as httpRequest } from 'node:http';
@@ -17,23 +18,30 @@ export async function handleInvocations(
 ): Promise<void> {
   const body = await ctx.readBody(req);
 
-  let agentPort: number | undefined;
-  let agentName: string | undefined;
-  let agentProtocol: string | undefined;
-  let sessionId: string | undefined;
-  let userId: string | undefined;
+  let parsedBody: Record<string, unknown>;
   try {
-    const parsed = JSON.parse(body) as { agentName?: string; sessionId?: string; userId?: string };
-    agentName = parsed.agentName;
-    sessionId = parsed.sessionId ?? randomUUID();
-    userId = parsed.userId;
-    if (agentName) {
-      const running = ctx.runningAgents.get(agentName);
-      agentPort = running?.port;
-      agentProtocol = running?.protocol;
-    }
+    parsedBody = JSON.parse(body) as Record<string, unknown>;
   } catch {
-    // fall through
+    ctx.setCorsHeaders(res, origin);
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }));
+    return;
+  }
+
+  // Route to harness handler if harnessName is present
+  if (parsedBody.harnessName) {
+    return handleHarnessInvocation(ctx, body, res, origin);
+  }
+
+  let agentPort: number | undefined;
+  let agentProtocol: string | undefined;
+  const agentName = parsedBody.agentName as string | undefined;
+  const sessionId = (parsedBody.sessionId as string) || randomUUID();
+  const userId = parsedBody.userId as string | undefined;
+  if (agentName) {
+    const running = ctx.runningAgents.get(agentName);
+    agentPort = running?.port;
+    agentProtocol = running?.protocol;
   }
 
   // Clear any previous runtime error for this agent so stale errors don't persist

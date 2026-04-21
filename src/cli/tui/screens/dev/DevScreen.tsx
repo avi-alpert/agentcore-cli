@@ -31,8 +31,8 @@ interface DevScreenProps {
   headers?: Record<string, string>;
   /** Skip automatic resource deployment */
   skipDeploy?: boolean;
-  /** Called when the user selects a code-based agent that should open in Agent Inspector */
-  onLaunchBrowser?: (agentName: string) => void;
+  /** Called when deploy completes and browser mode should launch */
+  onLaunchBrowser?: (selection?: { agentName?: string; harnessName?: string }) => void;
 }
 
 interface ColoredLine {
@@ -223,21 +223,21 @@ export function DevScreen(props: DevScreenProps) {
 
     // Defer state updates to avoid synchronous setState in effect
     queueMicrotask(() => {
-      if (selectedAgentName) {
-        if (onLaunchBrowser) {
-          onLaunchBrowser(selectedAgentName);
-        } else {
-          setMode('chat');
-        }
+      if (onLaunchBrowser) {
+        const agentName =
+          selectedAgentName ??
+          (supportedAgents.length === 1 && availableHarnesses.length === 0 ? supportedAgents[0]?.name : undefined);
+        const harnessName =
+          selectedHarness ??
+          (availableHarnesses.length === 1 && supportedAgents.length === 0 ? availableHarnesses[0] : undefined);
+        onLaunchBrowser({ agentName, harnessName });
+      } else if (selectedAgentName) {
+        setMode('chat');
       } else if (selectedHarness) {
         setMode('harness');
       } else if (supportedAgents.length === 1 && availableHarnesses.length === 0 && supportedAgents[0]) {
-        if (onLaunchBrowser) {
-          onLaunchBrowser(supportedAgents[0].name);
-        } else {
-          setSelectedAgentName(supportedAgents[0].name);
-          setMode('chat');
-        }
+        setSelectedAgentName(supportedAgents[0].name);
+        setMode('chat');
       } else if (availableHarnesses.length === 1 && supportedAgents.length === 0) {
         setSelectedHarness(availableHarnesses[0]);
         setMode('harness');
@@ -438,7 +438,7 @@ export function DevScreen(props: DevScreenProps) {
             const agent = supportedAgents[selectedAgentIndex];
             if (agent) {
               if (onLaunchBrowser) {
-                onLaunchBrowser(agent.name);
+                onLaunchBrowser({ agentName: agent.name });
               } else {
                 setSelectedAgentName(agent.name);
                 setMode('chat');
@@ -448,8 +448,12 @@ export function DevScreen(props: DevScreenProps) {
             const harnessIdx = selectedAgentIndex - supportedAgents.length;
             const harnessName = availableHarnesses[harnessIdx];
             if (harnessName) {
-              setSelectedHarness(harnessName);
-              setMode('harness');
+              if (onLaunchBrowser) {
+                onLaunchBrowser({ harnessName });
+              } else {
+                setSelectedHarness(harnessName);
+                setMode('harness');
+              }
             }
           }
         }

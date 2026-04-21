@@ -16,10 +16,13 @@
 /** Response shape for GET /api/status */
 export interface StatusResponse {
   agents: StatusAgent[];
+  harnesses: StatusHarness[];
   running: StatusRunningAgent[];
   errors: StatusAgentError[];
   /** Agent name to pre-select in the UI (set when --runtime is specified) */
   selectedAgent?: string;
+  /** Harness name to pre-select in the UI */
+  selectedHarness?: string;
 }
 
 /** Agent metadata returned in the status response */
@@ -27,6 +30,11 @@ export interface StatusAgent {
   name: string;
   buildType: string;
   protocol: string;
+}
+
+/** Harness metadata returned in the status response */
+export interface StatusHarness {
+  name: string;
 }
 
 /** Running agent entry in the status response */
@@ -107,6 +115,7 @@ export interface ResourcesResponse {
   success: true;
   project: string;
   agents: ResourceAgent[];
+  harnesses: ResourceHarness[];
   memories: ResourceMemory[];
   credentials: ResourceCredential[];
   gateways: ResourceGateway[];
@@ -130,6 +139,21 @@ export interface ResourceAgent {
   deploymentStatus?: ResourceDeploymentStatus;
   deployed?: DeployedAgentState;
   invocationUrl?: string;
+}
+
+/** Deployed state for a harness */
+export interface DeployedHarnessState {
+  harnessId: string;
+  harnessArn: string;
+}
+
+/** Harness details in the resources response */
+export interface ResourceHarness {
+  name: string;
+  model: string;
+  tools: string[];
+  deploymentStatus?: ResourceDeploymentStatus;
+  deployed?: DeployedHarnessState;
 }
 
 /** Memory details in the resources response */
@@ -251,9 +275,42 @@ export interface StartResponse {
 /** Request body for POST /invocations */
 export interface InvocationRequest {
   agentName?: string;
+  harnessName?: string;
   prompt?: string;
   sessionId?: string;
   userId?: string;
+  harnessOverrides?: HarnessInvocationOverrides;
+}
+
+/** Overrides sent with harness invocations */
+export interface HarnessInvocationOverrides {
+  model?: HarnessModelOverride;
+  systemPrompt?: string;
+  skills?: { path: string }[];
+  actorId?: string;
+  maxIterations?: number;
+  maxTokens?: number;
+  timeoutSeconds?: number;
+}
+
+/** Model override — exactly one provider field should be set */
+export interface HarnessModelOverride {
+  bedrockModelConfig?: { modelId: string };
+  anthropicModelConfig?: { modelId: string };
+  openAIModelConfig?: { modelId: string };
+  geminiModelConfig?: { modelId: string };
+}
+
+// ---------------------------------------------------------------------------
+// POST /api/harness/tool-response
+// ---------------------------------------------------------------------------
+
+/** Request body for POST /api/harness/tool-response */
+export interface HarnessToolResponseRequest {
+  harnessName: string;
+  sessionId: string;
+  messages: { role: string; content: Record<string, unknown>[] }[];
+  harnessOverrides?: HarnessInvocationOverrides;
 }
 
 // ---------------------------------------------------------------------------

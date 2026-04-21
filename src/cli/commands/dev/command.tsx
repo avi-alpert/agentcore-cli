@@ -438,40 +438,22 @@ export const registerDev = (program: Command) => {
           return;
         }
 
-        // Projects with harnesses route through the TUI DevScreen for agent/harness selection.
-        // Selecting a code-based agent exits TUI and opens Agent Inspector in the browser.
-        if (hasHarnesses) {
-          const browserAgentName = await launchTuiDevScreenWithPicker(workingDir, {
-            skipDeploy: opts.skipDeploy,
-          });
-
-          if (browserAgentName) {
-            await runBrowserMode({
-              workingDir,
-              project,
-              port,
-              agentName: browserAgentName,
-              otelEnvVars,
-              collector,
-            });
-          }
-          return;
-        }
-
-        // Deploy resources before launching web UI (agents-only projects)
-        if (!opts.skipDeploy) {
-          await runCliDeploy();
-        }
-
-        // Default: launch web UI in browser (agents-only projects)
-        await runBrowserMode({
-          workingDir,
-          project,
-          port,
-          agentName: opts.runtime,
-          otelEnvVars,
-          collector,
+        // Show TUI deploy progress, then launch Agent Inspector in the browser
+        const pickerResult = await launchTuiDevScreenWithPicker(workingDir, {
+          skipDeploy: opts.skipDeploy,
         });
+
+        if (pickerResult != null) {
+          await runBrowserMode({
+            workingDir,
+            project,
+            port,
+            agentName: pickerResult.agentName,
+            harnessName: pickerResult.harnessName,
+            otelEnvVars,
+            collector,
+          });
+        }
       } catch (error) {
         render(<Text color="red">Error: {getErrorMessage(error)}</Text>);
         process.exit(1);

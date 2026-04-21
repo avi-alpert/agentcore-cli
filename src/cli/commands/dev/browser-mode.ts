@@ -8,6 +8,7 @@ import {
   type RetrieveMemoryRecordsHandler,
   runWebUI,
 } from '../../operations/dev/web-ui';
+import type { HarnessInfo } from '../../operations/dev/web-ui/constants';
 import { listMemoryRecords, retrieveMemoryRecords } from '../../operations/memory';
 import { LayoutProvider } from '../../tui/context';
 import { runCliDeploy } from '../deploy/progress';
@@ -98,6 +99,7 @@ export interface BrowserModeOptions {
   project: AgentCoreProjectSpec;
   port: number;
   agentName?: string;
+  harnessName?: string;
   /** OTEL env vars to pass to dev servers (set by the dev command when collector is active) */
   otelEnvVars?: Record<string, string>;
   /** OTEL collector instance for local trace collection */
@@ -113,35 +115,15 @@ export async function launchBrowserDev(): Promise<void> {
   const project = await loadProjectConfig(workingDir);
 
   if (!project) {
-    console.error('Error: No agents defined in project.');
+    console.error('Error: No agents or harnesses defined in project.');
     process.exit(1);
   }
 
+  const hasRuntimes = project.runtimes.length > 0;
   const hasHarnesses = (project.harnesses ?? []).length > 0;
 
-  // Projects with harnesses go through the TUI for agent/harness selection.
-  // Selecting a code-based agent exits TUI and opens Agent Inspector.
-  if (hasHarnesses) {
-    const selectedAgent = await launchTuiDevScreenWithPicker(workingDir);
-    if (!selectedAgent) return;
-
-    const configRoot = findConfigRoot(workingDir);
-    const persistTracesDir = path.join(configRoot ?? workingDir, '.cli', 'traces');
-    const { collector, otelEnvVars } = await startOtelCollector(persistTracesDir);
-
-    await runBrowserMode({
-      workingDir,
-      project,
-      port: 8080,
-      agentName: selectedAgent,
-      otelEnvVars,
-      collector,
-    });
-    return;
-  }
-
-  if (project.runtimes.length === 0) {
-    console.error('Error: No agents defined in project.');
+  if (!hasRuntimes && !hasHarnesses) {
+    console.error('Error: No agents or harnesses defined in project.');
     process.exit(1);
   }
 
@@ -161,14 +143,15 @@ export async function launchBrowserDev(): Promise<void> {
 }
 
 export async function runBrowserMode(opts: BrowserModeOptions): Promise<void> {
-  const { workingDir, project, agentName, otelEnvVars = {}, collector } = opts;
+  const { workingDir, project, agentName, harnessName, otelEnvVars = {}, collector } = opts;
 
   const configRoot = findConfigRoot(workingDir);
   const { envVars } = await loadDevEnv(workingDir);
 
   const supportedAgents = getDevSupportedAgents(project);
+  const projectHasHarnesses = (project.harnesses ?? []).length > 0;
 
-  if (supportedAgents.length === 0) {
+  if (supportedAgents.length === 0 && !projectHasHarnesses) {
     console.error('Error: No dev-supported agents found.');
     process.exit(1);
   }
@@ -195,13 +178,50 @@ export async function runBrowserMode(opts: BrowserModeOptions): Promise<void> {
   // Handlers re-resolve on each call so newly deployed memories are picked up.
   const baseDir = configRoot ?? workingDir;
 
+  // Discover deployed harnesses from project config + deployed state
+  const harnessInfoList: HarnessInfo[] = [];
+  try {
+    const configIO = new ConfigIO({ baseDir });
+    if (configIO.configExists('state') && configIO.configExists('awsTargets')) {
+      const deployedState = await configIO.readDeployedState();
+      const awsTargets = await configIO.readAWSDeploymentTargets();
+      const targetName = Object.keys(deployedState.targets)[0];
+      if (targetName) {
+        const targetState = deployedState.targets[targetName];
+        const targetConfig = awsTargets.find(t => t.name === targetName);
+        if (targetConfig) {
+          for (const harness of project.harnesses ?? []) {
+            const state = targetState?.resources?.harnesses?.[harness.name];
+            if (state) {
+              harnessInfoList.push({
+                name: harness.name,
+                harnessArn: state.harnessArn,
+                region: targetConfig.region,
+              });
+            }
+          }
+          if (harnessInfoList.length > 0) {
+            onLog(
+              'info',
+              `Found ${harnessInfoList.length} deployed harness(es): ${harnessInfoList.map(h => h.name).join(', ')}`
+            );
+          }
+        }
+      }
+    }
+  } catch {
+    // Harness discovery is best-effort — local dev works without it
+  }
+
   await runWebUI({
     logLabel: 'dev',
     onLog,
     serverOptions: {
       mode: 'dev',
       agents: agentInfoList,
+      harnesses: harnessInfoList,
       selectedAgent: agentName,
+      selectedHarness: harnessName,
       envVars: mergedEnvVars,
       getEnvVars: async () => {
         const { envVars: freshEnvVars } = await loadDevEnv(workingDir);
@@ -244,10 +264,15 @@ const ENTER_ALT_SCREEN = '\x1B[?1049h\x1B[H';
 const EXIT_ALT_SCREEN = '\x1B[?1049l';
 const SHOW_CURSOR = '\x1B[?25h';
 
+interface TuiPickerResult {
+  agentName?: string;
+  harnessName?: string;
+}
+
 export async function launchTuiDevScreenWithPicker(
   workingDir: string,
   options?: { skipDeploy?: boolean }
-): Promise<string | undefined> {
+): Promise<TuiPickerResult | undefined> {
   process.stdout.write(ENTER_ALT_SCREEN);
 
   const exitAltScreen = () => {
@@ -255,7 +280,7 @@ export async function launchTuiDevScreenWithPicker(
     process.stdout.write(SHOW_CURSOR);
   };
 
-  let browserAgentName: string | undefined;
+  let pickerResult: TuiPickerResult | undefined;
   const { DevScreen } = await import('../../tui/screens/dev/DevScreen');
   const { unmount, waitUntilExit } = render(
     React.createElement(
@@ -269,8 +294,8 @@ export async function launchTuiDevScreenWithPicker(
         },
         workingDir,
         skipDeploy: options?.skipDeploy,
-        onLaunchBrowser: (agentName: string) => {
-          browserAgentName = agentName;
+        onLaunchBrowser: (selection?: { agentName?: string; harnessName?: string }) => {
+          pickerResult = selection ?? {};
           exitAltScreen();
           unmount();
         },
@@ -280,5 +305,5 @@ export async function launchTuiDevScreenWithPicker(
 
   await waitUntilExit();
   exitAltScreen();
-  return browserAgentName;
+  return pickerResult;
 }
