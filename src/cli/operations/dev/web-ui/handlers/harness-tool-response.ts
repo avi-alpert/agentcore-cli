@@ -4,6 +4,39 @@ import { buildInvokeOptions } from './harness-utils';
 import type { RouteContext } from './route-context';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
+interface ParsedToolResponseRequest {
+  harnessName: string;
+  sessionId: string;
+  messages: { role: string; content: Record<string, unknown>[] }[];
+  harnessOverrides?: HarnessInvocationOverrides;
+}
+
+function parseToolResponseRequest(body: string): {
+  parsed?: ParsedToolResponseRequest;
+  error?: string;
+  status?: number;
+} {
+  let raw: Record<string, unknown>;
+  try {
+    raw = JSON.parse(body) as Record<string, unknown>;
+  } catch {
+    return { error: 'Invalid JSON', status: 400 };
+  }
+
+  if (!raw.harnessName) return { error: 'harnessName is required', status: 400 };
+  if (!raw.messages || !Array.isArray(raw.messages)) return { error: 'messages array is required', status: 400 };
+  if (!raw.sessionId) return { error: 'sessionId is required', status: 400 };
+
+  return {
+    parsed: {
+      harnessName: raw.harnessName as string,
+      sessionId: raw.sessionId as string,
+      messages: raw.messages as ParsedToolResponseRequest['messages'],
+      harnessOverrides: raw.harnessOverrides as HarnessInvocationOverrides | undefined,
+    },
+  };
+}
+
 export async function handleHarnessToolResponse(
   ctx: RouteContext,
   req: IncomingMessage,
@@ -12,39 +45,11 @@ export async function handleHarnessToolResponse(
 ): Promise<void> {
   const body = await ctx.readBody(req);
 
-  let parsed: {
-    harnessName?: string;
-    sessionId?: string;
-    messages?: { role: string; content: Record<string, unknown>[] }[];
-    harnessOverrides?: HarnessInvocationOverrides;
-  };
-  try {
-    parsed = JSON.parse(body) as typeof parsed;
-  } catch {
+  const { parsed, error, status } = parseToolResponseRequest(body);
+  if (!parsed) {
     ctx.setCorsHeaders(res, origin);
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'Invalid JSON' }));
-    return;
-  }
-
-  if (!parsed.harnessName) {
-    ctx.setCorsHeaders(res, origin);
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'harnessName is required' }));
-    return;
-  }
-
-  if (!parsed.messages || !Array.isArray(parsed.messages)) {
-    ctx.setCorsHeaders(res, origin);
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'messages array is required' }));
-    return;
-  }
-
-  if (!parsed.sessionId) {
-    ctx.setCorsHeaders(res, origin);
-    res.writeHead(400, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ success: false, error: 'sessionId is required' }));
+    res.writeHead(status ?? 400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ success: false, error }));
     return;
   }
 

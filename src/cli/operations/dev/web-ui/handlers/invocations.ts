@@ -30,7 +30,7 @@ export async function handleInvocations(
 
   // Route to harness handler if harnessName is present
   if (parsedBody.harnessName) {
-    return handleHarnessInvocation(ctx, body, res, origin);
+    return handleHarnessInvocation(ctx, parsedBody, res, origin);
   }
 
   let agentPort: number | undefined;

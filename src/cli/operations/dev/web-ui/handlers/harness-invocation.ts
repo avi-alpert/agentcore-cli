@@ -14,14 +14,7 @@ interface ParsedHarnessRequest {
   overrides?: HarnessInvocationOverrides;
 }
 
-function parseRequest(body: string): { parsed?: ParsedHarnessRequest; error?: string } {
-  let raw: Record<string, unknown>;
-  try {
-    raw = JSON.parse(body) as Record<string, unknown>;
-  } catch {
-    return { error: 'Invalid JSON' };
-  }
-
+function parseRequest(raw: Record<string, unknown>): { parsed?: ParsedHarnessRequest; error?: string } {
   const harnessName = raw.harnessName as string | undefined;
   if (!harnessName) return { error: 'harnessName is required' };
 
@@ -41,7 +34,7 @@ function parseRequest(body: string): { parsed?: ParsedHarnessRequest; error?: st
 
 export async function handleHarnessInvocation(
   ctx: RouteContext,
-  body: string,
+  body: Record<string, unknown>,
   res: ServerResponse,
   origin?: string
 ): Promise<void> {

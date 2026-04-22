@@ -85,7 +85,7 @@ describe('handleHarnessInvocation', () => {
     const ctx = mockCtx();
     const res = mockRes();
 
-    await handleHarnessInvocation(ctx, JSON.stringify({ prompt: 'hello' }), res, undefined);
+    await handleHarnessInvocation(ctx, { prompt: 'hello' }, res, undefined);
 
     expect(res._status).toBe(400);
     expect(res._chunks[0]).toBeDefined();
@@ -96,7 +96,7 @@ describe('handleHarnessInvocation', () => {
     const ctx = mockCtx();
     const res = mockRes();
 
-    await handleHarnessInvocation(ctx, JSON.stringify({ harnessName: 'test-harness' }), res, undefined);
+    await handleHarnessInvocation(ctx, { harnessName: 'test-harness' }, res, undefined);
 
     expect(res._status).toBe(400);
     expect(res._chunks[0]).toBeDefined();
@@ -107,7 +107,7 @@ describe('handleHarnessInvocation', () => {
     const ctx = mockCtx();
     const res = mockRes();
 
-    await handleHarnessInvocation(ctx, JSON.stringify({ harnessName: 'unknown', prompt: 'hello' }), res, undefined);
+    await handleHarnessInvocation(ctx, { harnessName: 'unknown', prompt: 'hello' }, res, undefined);
 
     expect(res._status).toBe(404);
     expect(res._chunks[0]).toBeDefined();
@@ -128,7 +128,7 @@ describe('handleHarnessInvocation', () => {
 
     await handleHarnessInvocation(
       ctx,
-      JSON.stringify({ harnessName: 'test-harness', prompt: 'hello', sessionId: 'sess-1' }),
+      { harnessName: 'test-harness', prompt: 'hello', sessionId: 'sess-1' },
       res,
       undefined
     );
@@ -163,7 +163,7 @@ describe('handleHarnessInvocation', () => {
 
     await handleHarnessInvocation(
       ctx,
-      JSON.stringify({ harnessName: 'test-harness', prompt: 'hi', sessionId: 'sess-1', harnessOverrides: overrides }),
+      { harnessName: 'test-harness', prompt: 'hi', sessionId: 'sess-1', harnessOverrides: overrides },
       res,
       undefined
     );
@@ -188,7 +188,7 @@ describe('handleHarnessInvocation', () => {
 
     await handleHarnessInvocation(
       ctx,
-      JSON.stringify({ harnessName: 'test-harness', prompt: 'hello', sessionId: 'sess-1' }),
+      { harnessName: 'test-harness', prompt: 'hello', sessionId: 'sess-1' },
       res,
       undefined
     );
