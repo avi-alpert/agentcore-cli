@@ -4,7 +4,7 @@ import { execSync } from 'child_process';
 const distroConfig = getDistroConfig();
 
 export async function fetchLatestVersion(): Promise<string> {
-  const registryUrl = `${distroConfig.registryUrl}/${distroConfig.packageName}/latest`;
+  const registryUrl = `${distroConfig.registryUrl}/${distroConfig.packageName}/${distroConfig.distTag}`;
   const response = await fetch(registryUrl);
   if (!response.ok) {
     throw new Error(`Failed to fetch latest version: ${response.statusText}`);

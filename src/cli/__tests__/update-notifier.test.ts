@@ -15,6 +15,12 @@ vi.mock('fs/promises', () => ({
 
 vi.mock('../constants.js', () => ({
   PACKAGE_VERSION: '1.0.0',
+  getDistroConfig: () => ({
+    packageName: '@aws/agentcore',
+    registryUrl: 'https://registry.npmjs.org',
+    distTag: 'latest',
+    installCommand: 'npm install -g @aws/agentcore@latest',
+  }),
 }));
 
 const { mockFetchLatestVersion, mockCompareVersions } = vi.hoisted(() => ({

@@ -14,6 +14,7 @@ vi.mock('../../../constants.js', () => ({
   getDistroConfig: () => ({
     packageName: '@aws/agentcore',
     registryUrl: 'https://registry.npmjs.org',
+    distTag: 'latest',
     installCommand: 'npm install -g @aws/agentcore@latest',
   }),
 }));
