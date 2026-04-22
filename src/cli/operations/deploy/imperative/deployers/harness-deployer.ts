@@ -75,7 +75,7 @@ export class HarnessDeployer implements ImperativeDeployer<HarnessDeployedStateM
 
     const projectHarnesses = projectSpec.harnesses ?? [];
     const deployedHarnesses = deployedState.targets?.[targetName]?.resources?.harnesses ?? {};
-    const resultState: HarnessDeployedStateMap = {};
+    const resultState: HarnessDeployedStateMap = { ...deployedHarnesses };
     const notes: string[] = [];
 
     // Build set of harness names in current project spec
@@ -222,6 +222,7 @@ export class HarnessDeployer implements ImperativeDeployer<HarnessDeployedStateM
       if (!projectHarnessNames.has(name)) {
         try {
           await deleteHarness({ region, harnessId: state.harnessId });
+          delete resultState[name];
           notes.push(`Deleted harness "${name}"`);
         } catch (err) {
           const message = err instanceof Error ? err.message : String(err);

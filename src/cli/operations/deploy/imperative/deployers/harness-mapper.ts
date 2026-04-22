@@ -154,9 +154,9 @@ function mapModel(model: HarnessSpec['model']): HarnessModelConfiguration {
       };
     case 'open_ai':
       return {
-        openAIModelConfig: {
+        openAiModelConfig: {
           modelId,
-          ...(apiKeyArn && { apiKeyCredentialProviderArn: apiKeyArn }),
+          ...(apiKeyArn && { apiKeyArn }),
           ...(temperature !== undefined && { temperature }),
           ...(topP !== undefined && { topP }),
           ...(maxTokens !== undefined && { maxTokens }),
@@ -166,7 +166,7 @@ function mapModel(model: HarnessSpec['model']): HarnessModelConfiguration {
       return {
         geminiModelConfig: {
           modelId,
-          ...(apiKeyArn && { apiKeyCredentialProviderArn: apiKeyArn }),
+          ...(apiKeyArn && { apiKeyArn }),
           ...(temperature !== undefined && { temperature }),
           ...(topP !== undefined && { topP }),
           ...(topK !== undefined && { topK }),

@@ -19,9 +19,8 @@ export type HarnessStatus = 'CREATING' | 'READY' | 'UPDATING' | 'DELETING' | 'DE
 
 export interface HarnessModelConfiguration {
   bedrockModelConfig?: { modelId: string };
-  anthropicModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
-  openAIModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
-  geminiModelConfig?: { modelId: string; apiKeyCredentialProviderArn?: string };
+  openAiModelConfig?: { modelId: string; apiKeyArn?: string };
+  geminiModelConfig?: { modelId: string; apiKeyArn?: string };
 }
 
 export type HarnessSystemPrompt = { text: string }[];

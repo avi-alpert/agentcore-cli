@@ -609,7 +609,22 @@ async function handleHarnessInvoke(
     ];
 
     const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
-    if (options.modelId) baseOpts.model = { bedrockModelConfig: { modelId: options.modelId } };
+    if (options.modelId || options.modelProvider || options.apiKeyArn) {
+      const provider = options.modelProvider ?? harnessSpec?.model?.provider;
+      const modelId = options.modelId ?? harnessSpec?.model?.modelId ?? '';
+      const apiKeyArn = options.apiKeyArn ?? harnessSpec?.model?.apiKeyArn;
+      switch (provider) {
+        case 'open_ai':
+          baseOpts.model = { openAiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+          break;
+        case 'gemini':
+          baseOpts.model = { geminiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+          break;
+        default:
+          baseOpts.model = { bedrockModelConfig: { modelId } };
+          break;
+      }
+    }
     if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
     if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
     if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;

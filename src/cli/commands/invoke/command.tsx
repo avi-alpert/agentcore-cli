@@ -117,6 +117,11 @@ export const registerInvoke = (program: Command) => {
     .option('--harness <name>', 'Select specific harness to invoke [non-interactive]')
     .option('--verbose', 'Print verbose streaming JSON events (harness only) [non-interactive]')
     .option('--model-id <id>', 'Override model for this invocation (harness only) [non-interactive]')
+    .option(
+      '--model-provider <provider>',
+      'Override model provider: bedrock, open_ai, gemini (harness only) [non-interactive]'
+    )
+    .option('--api-key-arn <arn>', 'Override API key ARN for open_ai/gemini (harness only) [non-interactive]')
     .option('--tools <tools>', 'Override tools, comma-separated (harness only) [non-interactive]')
     .option('--max-iterations <n>', 'Override max iterations (harness only) [non-interactive]', parseInt)
     .option('--max-tokens <n>', 'Override max tokens (harness only) [non-interactive]', parseInt)
@@ -145,6 +150,8 @@ export const registerInvoke = (program: Command) => {
           harness?: string;
           verbose?: boolean;
           modelId?: string;
+          modelProvider?: string;
+          apiKeyArn?: string;
           tools?: string;
           maxIterations?: number;
           maxTokens?: number;
@@ -196,6 +203,8 @@ export const registerInvoke = (program: Command) => {
               bearerToken: cliOptions.bearerToken,
               verbose: cliOptions.verbose,
               modelId: cliOptions.modelId,
+              modelProvider: cliOptions.modelProvider,
+              apiKeyArn: cliOptions.apiKeyArn,
               tools: cliOptions.tools,
               maxIterations: cliOptions.maxIterations,
               maxTokens: cliOptions.maxTokens,

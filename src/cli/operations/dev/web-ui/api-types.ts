@@ -296,8 +296,7 @@ export interface HarnessInvocationOverrides {
 /** Model override — exactly one provider field should be set */
 export interface HarnessModelOverride {
   bedrockModelConfig?: { modelId: string };
-  anthropicModelConfig?: { modelId: string };
-  openAIModelConfig?: { modelId: string };
+  openAiModelConfig?: { modelId: string };
   geminiModelConfig?: { modelId: string };
 }
 

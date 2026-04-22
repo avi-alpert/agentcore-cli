@@ -66,6 +66,7 @@ async function main() {
     containerUri?: string;
     hasDockerfile?: boolean;
     tools?: { type: string; name: string }[];
+    apiKeyArn?: string;
   }[] = [];
   for (const entry of specAny.harnesses ?? []) {
     const harnessPath = path.resolve(projectRoot, entry.path, 'harness.json');
@@ -78,6 +79,7 @@ async function main() {
         containerUri: harnessSpec.containerUri,
         hasDockerfile: !!harnessSpec.dockerfile,
         tools: harnessSpec.tools,
+        apiKeyArn: harnessSpec.model?.apiKeyArn,
       });
     } catch (err) {
       throw new Error(

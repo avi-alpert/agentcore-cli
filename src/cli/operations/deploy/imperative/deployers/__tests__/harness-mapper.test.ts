@@ -62,7 +62,7 @@ describe('mapHarnessSpecToCreateOptions', () => {
       });
     });
 
-    it('maps open_ai provider with apiKeyArn to apiKeyCredentialProviderArn', async () => {
+    it('maps open_ai provider with apiKeyArn', async () => {
       const spec = minimalSpec({
         model: {
           provider: 'open_ai',
@@ -77,9 +77,9 @@ describe('mapHarnessSpecToCreateOptions', () => {
       const result = await mapHarnessSpecToCreateOptions({ ...BASE_OPTIONS, harnessSpec: spec });
 
       expect(result.model).toEqual({
-        openAIModelConfig: {
+        openAiModelConfig: {
           modelId: 'gpt-4o',
-          apiKeyCredentialProviderArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:openai-key',
+          apiKeyArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:openai-key',
           temperature: 0.5,
           topP: 0.8,
           maxTokens: 2048,
@@ -103,7 +103,7 @@ describe('mapHarnessSpecToCreateOptions', () => {
       expect(result.model).toEqual({
         geminiModelConfig: {
           modelId: 'gemini-1.5-pro',
-          apiKeyCredentialProviderArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:gemini-key',
+          apiKeyArn: 'arn:aws:secretsmanager:us-east-1:123456789012:secret:gemini-key',
           topK: 0.4,
           temperature: 0.3,
         },

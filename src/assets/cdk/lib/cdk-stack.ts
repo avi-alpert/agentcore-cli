@@ -23,7 +23,15 @@ export interface AgentCoreStackProps extends StackProps {
   /**
    * Harness role configurations. Each entry creates an IAM execution role for a harness.
    */
-  harnesses?: { name: string; executionRoleArn?: string; memoryName?: string }[];
+  harnesses?: {
+    name: string;
+    executionRoleArn?: string;
+    memoryName?: string;
+    containerUri?: string;
+    hasDockerfile?: boolean;
+    tools?: { type: string; name: string }[];
+    apiKeyArn?: string;
+  }[];
 }
 
 /**
