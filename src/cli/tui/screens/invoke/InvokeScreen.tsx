@@ -498,6 +498,7 @@ export function InvokeScreen({
   // Check if the last assistant message is empty (streaming hasn't started yet)
   const lastMessage = messages[messages.length - 1];
   const showThinking = phase === 'invoking' && lastMessage?.role === 'assistant' && !lastMessage.content;
+  const thinkingLabel = isExecInput ? 'Loading...' : 'Thinking...';
 
   return (
     <Screen
@@ -517,7 +518,7 @@ export function InvokeScreen({
               </Text>
             ))}
             {/* Thinking indicator - shows while waiting for response to start */}
-            {showThinking && <GradientText text="Thinking..." />}
+            {showThinking && <GradientText text={thinkingLabel} />}
           </Box>
         )}
 

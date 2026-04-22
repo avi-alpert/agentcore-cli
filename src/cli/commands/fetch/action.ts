@@ -1,5 +1,6 @@
 import { fetchGatewayToken, fetchRuntimeToken, listGateways } from '../../operations/fetch-access';
 import type { OAuthTokenResult, TokenFetchResult } from '../../operations/fetch-access';
+import { fetchHarnessToken } from '../../operations/fetch-access/fetch-harness-token';
 import type { FetchAccessOptions } from './types';
 
 export interface FetchAccessResult {
@@ -14,6 +15,10 @@ export async function handleFetchAccess(options: FetchAccessOptions): Promise<Fe
 
   if (resourceType === 'agent') {
     return handleFetchAgentAccess(options);
+  }
+
+  if (resourceType === 'harness') {
+    return handleFetchHarnessAccess(options);
   }
 
   return handleFetchGatewayAccess(options);
@@ -49,6 +54,31 @@ async function handleFetchAgentAccess(options: FetchAccessOptions): Promise<Fetc
     tokenResult = await fetchRuntimeToken(options.name, {
       deployTarget: options.target,
       identityName: options.identityName,
+    });
+  } catch (err) {
+    return { success: false, error: err instanceof Error ? err.message : String(err) };
+  }
+
+  return {
+    success: true,
+    result: {
+      url: '',
+      authType: 'CUSTOM_JWT',
+      token: tokenResult.token,
+      expiresIn: tokenResult.expiresIn,
+    },
+  };
+}
+
+async function handleFetchHarnessAccess(options: FetchAccessOptions): Promise<FetchAccessResult> {
+  if (!options.name) {
+    return { success: false, error: 'Missing required option: --name <harness>' };
+  }
+
+  let tokenResult: OAuthTokenResult;
+  try {
+    tokenResult = await fetchHarnessToken(options.name, {
+      deployTarget: options.target,
     });
   } catch (err) {
     return { success: false, error: err instanceof Error ? err.message : String(err) };

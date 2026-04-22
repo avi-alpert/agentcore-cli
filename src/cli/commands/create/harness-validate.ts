@@ -33,7 +33,10 @@ const MODEL_PROVIDER_MAPPING: Record<string, string> = {
   bedrock: 'bedrock',
   Bedrock: 'bedrock',
   open_ai: 'open_ai',
+  openai: 'open_ai',
   OpenAI: 'open_ai',
+  anthropic: 'bedrock',
+  Anthropic: 'bedrock',
   gemini: 'gemini',
   Gemini: 'gemini',
 };

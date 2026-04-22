@@ -221,7 +221,6 @@ export function computeResourceStatuses(
     ...onlineEvalConfigs,
     ...policyEngines,
     ...policies,
-    ...harnesses,
   ];
 }
 

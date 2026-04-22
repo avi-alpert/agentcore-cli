@@ -24,6 +24,7 @@ export interface CreateHarnessProjectOptions {
   securityGroups?: string[];
   idleTimeout?: number;
   maxLifetime?: number;
+  sessionStoragePath?: string;
   skipGit?: boolean;
   skipInstall?: boolean;
   onProgress?: ProgressCallback;
@@ -67,6 +68,7 @@ export async function createProjectWithHarness(options: CreateHarnessProjectOpti
       securityGroups: options.securityGroups,
       idleTimeout: options.idleTimeout,
       maxLifetime: options.maxLifetime,
+      sessionStoragePath: options.sessionStoragePath,
       configBaseDir,
     });
 

@@ -714,7 +714,9 @@ async function handleHarnessInvoke(
               process.stderr.write(
                 `\n${dim}⚡ ${cyan}${inputTokens}${dim} in · ${cyan}${outputTokens}${dim} out · ${cyan}${latency}s${reset}\n`
               );
-              process.stderr.write(`${dim}🔗 Session: ${cyan}${sessionId}${reset}\n`);
+              process.stderr.write(
+                `${dim}🔗 Session: ${cyan}${sessionId}${dim} (use --session-id to continue)${reset}\n`
+              );
             }
             break;
           case 'error':

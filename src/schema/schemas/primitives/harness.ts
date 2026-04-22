@@ -233,7 +233,11 @@ export const HarnessSpecSchema = z
     networkMode: NetworkModeSchema.optional(),
     networkConfig: NetworkConfigSchema.optional(),
     lifecycleConfig: LifecycleConfigurationSchema.optional(),
-    sessionStoragePath: z.string().min(1).optional(),
+    sessionStoragePath: z
+      .string()
+      .min(1)
+      .refine(val => val.startsWith('/mnt/'), { message: 'sessionStoragePath must be an absolute path under /mnt/' })
+      .optional(),
     environmentVariables: z.record(z.string(), z.string()).optional(),
     /** Authorizer type for inbound requests. Defaults to AWS_IAM. */
     authorizerType: RuntimeAuthorizerTypeSchema.optional(),

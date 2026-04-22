@@ -186,6 +186,7 @@ async function handleCreateHarnessCLI(options: CreateOptions): Promise<void> {
     securityGroups: parseCommaSeparatedList(options.securityGroups),
     idleTimeout: options.idleTimeout ? Number(options.idleTimeout) : undefined,
     maxLifetime: options.maxLifetime ? Number(options.maxLifetime) : undefined,
+    sessionStoragePath: options.sessionStorageMountPath,
     skipGit: options.skipGit,
     skipInstall: options.skipInstall,
     onProgress,
@@ -310,7 +311,7 @@ export const registerCreate = (program: Command) => {
       '--framework <framework>',
       'Agent framework (Strands, LangChain_LangGraph, GoogleADK, OpenAIAgents); triggers agent/runtime path [non-interactive]'
     )
-    .option('--model-provider <provider>', 'Model provider (Bedrock, Anthropic, OpenAI, Gemini) [non-interactive]')
+    .option('--model-provider <provider>', 'Model provider: bedrock, open_ai, gemini (harness path) [non-interactive]')
     .option('--api-key <key>', 'API key for non-Bedrock providers [non-interactive]')
     .option('--memory <option>', 'Memory option (none, shortTerm, longAndShortTerm) [non-interactive]')
     .option('--protocol <protocol>', 'Protocol: HTTP, MCP, A2A (default: HTTP) [non-interactive]')
@@ -430,6 +431,9 @@ export const registerCreate = (program: Command) => {
         }
 
         // Harness path (default)
+        if (!opts.json && !opts.modelProvider && !hasHarnessOnlyFlags(opts)) {
+          console.log('Creating a harness project (pass --framework to create an agent project instead).');
+        }
         await handleCreateHarnessCLI(opts);
       } catch (error) {
         render(<Text color="red">Error: {getErrorMessage(error)}</Text>);
