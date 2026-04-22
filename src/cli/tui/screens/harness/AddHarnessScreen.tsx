@@ -373,7 +373,7 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
         {isAdvancedStep && (
           <WizardMultiSelect
             title="Advanced settings (optional)"
-            description="Configure tools, memory, network, lifecycle, execution limits, truncation, or session storage"
+            description="Configure tools, network, lifecycle, execution limits, truncation, or session storage"
             items={advancedSettingItems}
             cursorIndex={advancedSettingsNav.cursorIndex}
             selectedIds={advancedSettingsNav.selectedIds}

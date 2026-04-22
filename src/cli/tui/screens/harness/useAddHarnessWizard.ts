@@ -5,7 +5,6 @@ import { DEFAULT_MODEL_IDS } from './types';
 import { useCallback, useMemo, useState } from 'react';
 
 const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
-  'memory',
   'tools',
   'auth',
   'network',
@@ -17,7 +16,6 @@ const ADVANCED_SETTING_ORDER: AdvancedSetting[] = [
 
 const SETTING_TO_FIRST_STEP: Record<AdvancedSetting, AddHarnessStep> = {
   tools: 'tools-select',
-  memory: 'memory',
   auth: 'authorizerType',
   network: 'network-mode',
   lifecycle: 'idle-timeout',
@@ -69,11 +67,9 @@ export function useAddHarnessWizard() {
       steps.push('container-dockerfile');
     }
 
-    steps.push('advanced');
+    steps.push('memory');
 
-    if (advancedSettings.includes('memory')) {
-      steps.push('memory');
-    }
+    steps.push('advanced');
 
     if (advancedSettings.includes('tools')) {
       steps.push('tools-select');
@@ -177,7 +173,7 @@ export function useAddHarnessWizard() {
     } else if (containerMode === 'dockerfile') {
       setStep('container-dockerfile');
     } else {
-      setStep('advanced');
+      setStep('memory');
     }
   }, []);
 
@@ -251,14 +247,10 @@ export function useAddHarnessWizard() {
     [advancedSettings]
   );
 
-  const setMemoryEnabled = useCallback(
-    (enabled: boolean) => {
-      setConfig(c => ({ ...c, skipMemory: !enabled }));
-      const next = getNextAdvancedStep(advancedSettings, 'memory');
-      setStep(next ?? 'confirm');
-    },
-    [advancedSettings]
-  );
+  const setMemoryEnabled = useCallback((enabled: boolean) => {
+    setConfig(c => ({ ...c, skipMemory: !enabled }));
+    setStep('advanced');
+  }, []);
 
   const setAuthorizerType = useCallback(
     (authorizerType: RuntimeAuthorizerType) => {

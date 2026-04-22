@@ -93,8 +93,16 @@ export const DEFAULT_MODEL_IDS: Record<HarnessModelProvider, string> = {
 
 export const MODEL_PROVIDER_OPTIONS = [
   { id: 'bedrock' as const, title: 'Amazon Bedrock', description: `Default: ${DEFAULT_MODEL_IDS.bedrock}` },
-  { id: 'open_ai' as const, title: 'OpenAI', description: `Default: ${DEFAULT_MODEL_IDS.open_ai} (requires API key ARN)` },
-  { id: 'gemini' as const, title: 'Google Gemini', description: `Default: ${DEFAULT_MODEL_IDS.gemini} (requires API key ARN)` },
+  {
+    id: 'open_ai' as const,
+    title: 'OpenAI',
+    description: `Default: ${DEFAULT_MODEL_IDS.open_ai} (requires API key ARN)`,
+  },
+  {
+    id: 'gemini' as const,
+    title: 'Google Gemini',
+    description: `Default: ${DEFAULT_MODEL_IDS.gemini} (requires API key ARN)`,
+  },
 ] as const;
 
 export const TRUNCATION_STRATEGY_OPTIONS = [
@@ -103,7 +111,6 @@ export const TRUNCATION_STRATEGY_OPTIONS = [
 ] as const;
 
 export const ADVANCED_SETTING_OPTIONS = [
-  { id: 'memory', title: 'Memory', description: 'Retain context across sessions' },
   { id: 'tools', title: 'Tools', description: 'Add browser, code interpreter, MCP, or gateway tools' },
   { id: 'auth', title: 'Authentication', description: 'Inbound auth: AWS_IAM or Custom JWT' },
   { id: 'network', title: 'Network', description: 'Deploy inside a VPC with custom subnets and security groups' },
@@ -132,7 +139,11 @@ export const CONTAINER_MODE_OPTIONS = [
 
 export const TOOL_SELECT_OPTIONS = [
   { id: 'agentcore_browser' as const, title: 'AgentCore Browser', description: 'Web browsing and automation' },
-  { id: 'agentcore_code_interpreter' as const, title: 'AgentCore Code Interpreter', description: 'Sandboxed code execution' },
+  {
+    id: 'agentcore_code_interpreter' as const,
+    title: 'AgentCore Code Interpreter',
+    description: 'Sandboxed code execution',
+  },
   { id: 'agentcore_gateway' as const, title: 'AgentCore Gateway', description: 'Connect via gateway' },
   { id: 'remote_mcp' as const, title: 'Remote MCP Server', description: 'Connect to an MCP server' },
 ] as const;
