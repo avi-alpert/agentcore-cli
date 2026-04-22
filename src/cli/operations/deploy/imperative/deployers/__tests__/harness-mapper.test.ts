@@ -319,8 +319,11 @@ describe('mapHarnessSpecToCreateOptions', () => {
       expect(result.environment).toEqual({
         agentCoreRuntimeEnvironment: {
           networkConfiguration: {
-            subnetIds: ['subnet-12345678'],
-            securityGroupIds: ['sg-12345678'],
+            networkMode: 'VPC',
+            networkModeConfig: {
+              subnets: ['subnet-12345678'],
+              securityGroups: ['sg-12345678'],
+            },
           },
         },
       });
@@ -363,8 +366,11 @@ describe('mapHarnessSpecToCreateOptions', () => {
       expect(result.environment).toEqual({
         agentCoreRuntimeEnvironment: {
           networkConfiguration: {
-            subnetIds: ['subnet-12345678'],
-            securityGroupIds: ['sg-12345678'],
+            networkMode: 'VPC',
+            networkModeConfig: {
+              subnets: ['subnet-12345678'],
+              securityGroups: ['sg-12345678'],
+            },
           },
           lifecycleConfiguration: {
             idleRuntimeSessionTimeout: 600,

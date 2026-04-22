@@ -346,8 +346,11 @@ function mapEnvironmentProvider(spec: HarnessSpec): HarnessEnvironmentProvider |
 
   if (spec.networkConfig) {
     agentCoreRuntimeEnvironment.networkConfiguration = {
-      subnetIds: spec.networkConfig.subnets,
-      securityGroupIds: spec.networkConfig.securityGroups,
+      networkMode: 'VPC',
+      networkModeConfig: {
+        subnets: spec.networkConfig.subnets,
+        securityGroups: spec.networkConfig.securityGroups,
+      },
     };
   }
 
