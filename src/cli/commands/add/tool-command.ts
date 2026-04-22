@@ -10,7 +10,7 @@ export function registerAddTool(addCmd: Command): void {
     .requiredOption('--harness <name>', 'Target harness name')
     .requiredOption(
       '--type <type>',
-      'Tool type: agentcore_browser, agentcore_code_interpreter, remote_mcp, agentcore_gateway'
+      'Tool type: agentcore_browser, agentcore_code_interpreter, remote_mcp, agentcore_gateway, inline_function'
     )
     .requiredOption('--name <name>', 'Tool name')
     .option('--url <url>', 'MCP server URL (required for remote_mcp)')
