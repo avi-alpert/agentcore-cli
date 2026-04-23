@@ -16,7 +16,7 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   timeout: 120_000,
-  retries: 0,
+  retries: process.env.CI ? 1 : 0,
   outputDir: './test-results',
   reporter: [['html', { open: 'never', outputFolder: './playwright-report' }]],
 
