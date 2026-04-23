@@ -56,7 +56,7 @@ export default async function globalSetup() {
     if (process.env.CI) {
       throw new Error(`Browser tests require: ${missing.join(', ')}`);
     }
-    console.log(`\n⏭️  Skipping browser tests — missing: ${missing.join(', ')}\n`);
+    console.log(`\nSkipping browser tests — missing: ${missing.join(', ')}\n`);
     process.exit(0);
   }
 
@@ -65,7 +65,7 @@ export default async function globalSetup() {
 
   const projectName = `BrTest${String(Date.now()).slice(-8)}`;
 
-  console.log(`\n📁 Creating test project "${projectName}" in ${testDir}`);
+  console.log(`\nCreating test project "${projectName}" in ${testDir}`);
 
   const cleanEnv = { ...process.env };
   delete cleanEnv.INIT_CWD;
@@ -90,15 +90,14 @@ export default async function globalSetup() {
   const parsed = JSON.parse(createResult.split('\n').pop()!);
   const projectPath: string = resolve(testDir, parsed.projectPath);
 
-  console.log(`✅ Project created at ${projectPath}`);
-  console.log(`🚀 Starting agentcore dev...`);
+  console.log(`Project created at ${projectPath}`);
+  console.log(`Starting agentcore dev...`);
 
   const env = { ...process.env };
   delete env.INIT_CWD;
   env.AGENTCORE_NO_OPEN = '1';
   if (env.AGENT_INSPECTOR_PATH) {
     env.AGENT_INSPECTOR_PATH = resolve(env.AGENT_INSPECTOR_PATH);
-    console.log(`🔧 Using custom agent-inspector: ${env.AGENT_INSPECTOR_PATH}`);
   }
 
   const ptyProcess = pty.spawn('node', [CLI_PATH, 'dev'], {
@@ -137,7 +136,7 @@ export default async function globalSetup() {
     throw new Error(`Web UI reported port ${webUIPort} but it is not responding.\nOutput: ${serverOutput}`);
   }
 
-  console.log(`✅ Dev server ready on port ${webUIPort}`);
+  console.log(`Dev server ready on port ${webUIPort}`);
 
   writeFileSync(
     ENV_FILE,

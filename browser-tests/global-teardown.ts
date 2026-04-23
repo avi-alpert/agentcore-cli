@@ -11,7 +11,7 @@ export default async function globalTeardown() {
   if (serverPid) {
     try {
       process.kill(Number(serverPid), 'SIGTERM');
-      console.log(`\n🛑 Stopped dev server (PID ${serverPid})`);
+      console.log(`\nStopped dev server (PID ${serverPid})`);
     } catch {
       // Process already exited
     }
@@ -31,7 +31,7 @@ export default async function globalTeardown() {
   }
 
   if (testDir && existsSync(testDir)) {
-    console.log(`🧹 Cleaning up ${testDir}`);
+    console.log(`Cleaning up ${testDir}`);
     rmSync(testDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 1000 });
   }
 
