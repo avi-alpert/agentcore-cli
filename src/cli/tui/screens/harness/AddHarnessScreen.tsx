@@ -362,6 +362,7 @@ export function AddHarnessScreen({ existingHarnessNames, onComplete, onExit }: A
         {isContainerUriStep && (
           <TextInput
             key="container-uri"
+            // eslint-disable-next-line partition/no-hardcoded-endpoint-tld -- example placeholder, not a real endpoint
             prompt="Container image URI (e.g., 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-harness:latest)"
             initialValue=""
             onSubmit={wizard.setContainerUri}

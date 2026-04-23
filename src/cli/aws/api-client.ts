@@ -3,6 +3,7 @@
  * When the SDK adds native commands for new APIs, we will migrate callers to the SDK client.
  */
 import { getCredentialProvider } from './account';
+import { dnsSuffix } from './partition';
 import { Sha256 } from '@aws-crypto/sha256-js';
 import { defaultProvider } from '@aws-sdk/credential-provider-node';
 import { HttpRequest } from '@smithy/protocol-http';
@@ -118,10 +119,10 @@ export function resolveEndpoint(region: string, plane: ApiPlane): string {
   if (plane === 'control') {
     if (stage === 'beta') return `https://beta.${region}.elcapcp.genesis-primitives.aws.dev`;
     if (stage === 'gamma') return `https://gamma.${region}.elcapcp.genesis-primitives.aws.dev`;
-    return `https://bedrock-agentcore-control.${region}.amazonaws.com`;
+    return `https://bedrock-agentcore-control.${region}.${dnsSuffix(region)}`;
   }
 
   if (stage === 'beta') return `https://beta.${region}.elcapdp.genesis-primitives.aws.dev`;
   if (stage === 'gamma') return `https://gamma.${region}.elcapdp.genesis-primitives.aws.dev`;
-  return `https://bedrock-agentcore.${region}.amazonaws.com`;
+  return `https://bedrock-agentcore.${region}.${dnsSuffix(region)}`;
 }
