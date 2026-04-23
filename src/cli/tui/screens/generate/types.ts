@@ -106,7 +106,7 @@ export const STEP_LABELS: Record<GenerateStep, string> = {
 
 export const LANGUAGE_OPTIONS = [
   { id: 'Python', title: 'Python' },
-  { id: 'TypeScript', title: 'TypeScript (coming soon)', disabled: true },
+  { id: 'TypeScript', title: 'TypeScript' },
 ] as const;
 
 export const BUILD_TYPE_OPTIONS = [
