@@ -13,13 +13,19 @@ const partitionPlugin = {
     'no-hardcoded-arn-partition': {
       meta: {
         type: 'problem',
-        docs: { description: 'Disallow hardcoded arn:aws: partition in ARN construction. Use arnPrefix(region) instead.' },
+        docs: {
+          description: 'Disallow hardcoded arn:aws: partition in ARN construction. Use arnPrefix(region) instead.',
+        },
         schema: [],
       },
       create(context) {
         function checkForHardcodedArn(node, value) {
           if (/arn:aws:/.test(value)) {
-            context.report({ node, message: 'Hardcoded "arn:aws:" detected. Use arnPrefix(region) from src/cli/aws/partition.ts for multi-partition support.' });
+            context.report({
+              node,
+              message:
+                'Hardcoded "arn:aws:" detected. Use arnPrefix(region) from src/cli/aws/partition.ts for multi-partition support.',
+            });
           }
         }
         return {
@@ -34,7 +40,10 @@ const partitionPlugin = {
     'no-hardcoded-endpoint-tld': {
       meta: {
         type: 'problem',
-        docs: { description: 'Disallow hardcoded amazonaws.com in endpoint URL construction. Use serviceEndpoint() or dnsSuffix() instead.' },
+        docs: {
+          description:
+            'Disallow hardcoded amazonaws.com in endpoint URL construction. Use serviceEndpoint() or dnsSuffix() instead.',
+        },
         schema: [],
       },
       create(context) {
@@ -49,13 +58,21 @@ const partitionPlugin = {
           TemplateLiteral(node) {
             for (const quasi of node.quasis) {
               if (hasHardcodedEndpoint(quasi.value.raw)) {
-                context.report({ node, message: 'Hardcoded ".amazonaws.com" in template literal. Use serviceEndpoint() or dnsSuffix() from src/cli/aws/partition.ts for multi-partition support.' });
+                context.report({
+                  node,
+                  message:
+                    'Hardcoded ".amazonaws.com" in template literal. Use serviceEndpoint() or dnsSuffix() from src/cli/aws/partition.ts for multi-partition support.',
+                });
               }
             }
           },
           Literal(node) {
             if (typeof node.value === 'string' && hasHardcodedEndpointWithRegion(node.value)) {
-              context.report({ node, message: 'Hardcoded endpoint with region detected. Use serviceEndpoint() or dnsSuffix() from src/cli/aws/partition.ts for multi-partition support.' });
+              context.report({
+                node,
+                message:
+                  'Hardcoded endpoint with region detected. Use serviceEndpoint() or dnsSuffix() from src/cli/aws/partition.ts for multi-partition support.',
+              });
             }
           },
         };
