@@ -95,7 +95,6 @@ export default async function globalSetup() {
 
   const env = { ...process.env };
   delete env.INIT_CWD;
-  env.AGENTCORE_NO_OPEN = '1';
   if (env.AGENT_INSPECTOR_PATH) {
     env.AGENT_INSPECTOR_PATH = resolve(env.AGENT_INSPECTOR_PATH);
   }
