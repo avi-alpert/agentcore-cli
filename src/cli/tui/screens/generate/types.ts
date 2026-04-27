@@ -121,6 +121,17 @@ export const PROTOCOL_OPTIONS = [
   { id: 'AGUI', title: 'AG-UI', description: 'Stream rich agent events to frontends' },
 ] as const;
 
+/**
+ * Get protocol options filtered by target language.
+ * TypeScript only supports HTTP.
+ */
+export function getProtocolOptionsForLanguage(language?: TargetLanguage) {
+  if (language === 'TypeScript') {
+    return PROTOCOL_OPTIONS.filter(option => option.id === 'HTTP');
+  }
+  return [...PROTOCOL_OPTIONS];
+}
+
 export const SDK_OPTIONS = [
   { id: 'Strands', title: 'Strands Agents SDK', description: 'AWS native agent framework' },
   { id: 'LangChain_LangGraph', title: 'LangChain + LangGraph', description: 'Popular open-source frameworks' },
