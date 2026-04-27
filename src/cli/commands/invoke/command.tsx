@@ -4,6 +4,7 @@ import { requireProject, requireTTY } from '../../tui/guards';
 import { InvokeScreen } from '../../tui/screens/invoke';
 import { parseHeaderFlags } from '../shared/header-utils';
 import { handleInvoke, loadInvokeConfig } from './action';
+import { resolvePrompt } from './resolve-prompt';
 import type { InvokeOptions } from './types';
 import { validateInvokeOptions } from './validate';
 import type { Command } from '@commander-js/extra-typings';
@@ -99,8 +100,15 @@ export const registerInvoke = (program: Command) => {
     .command('invoke')
     .alias('i')
     .description(COMMAND_DESCRIPTIONS.invoke)
-    .argument('[prompt]', 'Prompt to send to the agent [non-interactive]')
+    .argument(
+      '[prompt]',
+      'Prompt to send to the agent. Also accepts piped stdin when no prompt is provided and stdin is not a TTY [non-interactive]'
+    )
     .option('--prompt <text>', 'Prompt to send to the agent [non-interactive]')
+    .option(
+      '--prompt-file <path>',
+      'Read the prompt from a file (for long or structured payloads that exceed shell arg limits) [non-interactive]'
+    )
     .option('--runtime <name>', 'Select specific runtime [non-interactive]')
     .option('--target <name>', 'Select deployment target [non-interactive]')
     .option('--session-id <id>', 'Use specific session ID for conversation continuity')
@@ -123,6 +131,7 @@ export const registerInvoke = (program: Command) => {
         positionalPrompt: string | undefined,
         cliOptions: {
           prompt?: string;
+          promptFile?: string;
           runtime?: string;
           target?: string;
           sessionId?: string;
@@ -139,8 +148,22 @@ export const registerInvoke = (program: Command) => {
       ) => {
         try {
           requireProject();
-          // --prompt flag takes precedence over positional argument
-          const prompt = cliOptions.prompt ?? positionalPrompt;
+          // Resolve prompt from flag / positional / --prompt-file / stdin
+          const resolved = await resolvePrompt({
+            flag: cliOptions.prompt,
+            positional: positionalPrompt,
+            file: cliOptions.promptFile,
+            stdinPiped: !process.stdin.isTTY,
+          });
+          if (!resolved.success) {
+            if (cliOptions.json) {
+              console.log(JSON.stringify({ success: false, error: resolved.error }));
+            } else {
+              console.error(resolved.error);
+            }
+            process.exit(1);
+          }
+          const prompt = resolved.prompt;
 
           // Parse custom headers
           let headers: Record<string, string> | undefined;
@@ -150,7 +173,7 @@ export const registerInvoke = (program: Command) => {
 
           // CLI mode if any CLI-specific options provided (follows deploy command pattern)
           if (
-            prompt ||
+            prompt !== undefined ||
             cliOptions.json ||
             cliOptions.target ||
             cliOptions.stream ||
