@@ -14,6 +14,7 @@ export interface RemoveLoggerOptions {
     | 'credential'
     | 'gateway'
     | 'gateway-target'
+    | 'runtime-endpoint'
     | 'evaluator'
     | 'online-eval'
     | 'policy-engine'

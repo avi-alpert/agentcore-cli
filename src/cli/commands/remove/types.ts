@@ -3,6 +3,7 @@ export type ResourceType =
   | 'gateway'
   | 'gateway-target'
   | 'harness'
+  | 'runtime-endpoint'
   | 'memory'
   | 'credential'
   | 'evaluator'

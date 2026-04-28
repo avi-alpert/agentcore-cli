@@ -14,6 +14,7 @@ import {
   parseOnlineEvalOutputs,
   parsePolicyEngineOutputs,
   parsePolicyOutputs,
+  parseRuntimeEndpointOutputs,
 } from '../../cloudformation';
 import { getErrorMessage } from '../../errors';
 import { ExecLogger } from '../../logging';
@@ -441,6 +442,17 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
     );
     const policies = parsePolicyOutputs(outputs, policySpecs);
 
+    // Parse runtime endpoint outputs
+    const endpointSpecs: { agentName: string; endpointName: string }[] = [];
+    for (const runtime of context.projectSpec.runtimes) {
+      if (runtime.endpoints) {
+        for (const endpointName of Object.keys(runtime.endpoints)) {
+          endpointSpecs.push({ agentName: runtime.name, endpointName });
+        }
+      }
+    }
+    const runtimeEndpoints = parseRuntimeEndpointOutputs(outputs, endpointSpecs);
+
     // Parse gateway outputs
     const gatewaySpecs =
       mcpSpec?.agentCoreGateways?.reduce(
@@ -506,6 +518,7 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
       policyEngines,
       policies,
       harnesses: deployedHarnesses,
+      runtimeEndpoints,
     });
 
     if (deployHash) {

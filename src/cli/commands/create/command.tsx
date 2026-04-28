@@ -12,6 +12,7 @@ import { LIFECYCLE_TIMEOUT_MAX, LIFECYCLE_TIMEOUT_MIN } from '../../../schema';
 import { getErrorMessage } from '../../errors';
 import { harnessPrimitive } from '../../primitives/registry';
 import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
+import { requireTTY } from '../../tui/guards';
 import { CreateScreen } from '../../tui/screens/create';
 import { parseCommaSeparatedList } from '../shared/vpc-utils';
 import { type ProgressCallback, createProject, createProjectWithAgent, getDryRunInfo } from './action';
@@ -129,6 +130,7 @@ async function handleCreateHarnessCLI(options: CreateOptions): Promise<void> {
   const cwd = options.outputDir ?? getWorkingDirectory();
   const name = options.name ?? options.projectName;
   const projectName = options.projectName ?? name;
+
 
   const validation = validateCreateHarnessOptions(
     {
@@ -402,6 +404,7 @@ export const registerCreate = (program: Command) => {
         );
 
         if (!hasAnyFlag) {
+          requireTTY();
           handleCreateTUI();
           return;
         }

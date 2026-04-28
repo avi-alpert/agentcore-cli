@@ -3,6 +3,8 @@ export interface InvokeOptions {
   harnessName?: string;
   targetName?: string;
   prompt?: string;
+  /** Path to a file containing the prompt (alternative to --prompt / positional) */
+  promptFile?: string;
   sessionId?: string;
   userId?: string;
   json?: boolean;
@@ -50,6 +52,7 @@ export interface InvokeResult {
   agentName?: string;
   targetName?: string;
   response?: string;
+  sessionId?: string;
   error?: string;
   logFilePath?: string;
 }

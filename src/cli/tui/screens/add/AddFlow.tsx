@@ -14,6 +14,7 @@ import { AddGatewayFlow, AddGatewayTargetFlow } from '../mcp';
 import { AddMemoryFlow } from '../memory/AddMemoryFlow';
 import { AddOnlineEvalFlow } from '../online-eval';
 import { AddPolicyFlow } from '../policy';
+import { AddRuntimeEndpointFlow } from '../runtime-endpoint';
 import type { AddResourceType } from './AddScreen';
 import { AddScreen } from './AddScreen';
 import { AddSuccessScreen } from './AddSuccessScreen';
@@ -32,6 +33,7 @@ type FlowState =
   | { name: 'evaluator-wizard' }
   | { name: 'online-eval-wizard' }
   | { name: 'policy-wizard' }
+  | { name: 'runtime-endpoint-wizard' }
   | {
       name: 'agent-create-success';
       agentName: string;
@@ -183,6 +185,8 @@ function getInitialFlowState(resource?: AddResourceType): FlowState {
       return { name: 'online-eval-wizard' };
     case 'policy':
       return { name: 'policy-wizard' };
+    case 'runtime-endpoint':
+      return { name: 'runtime-endpoint-wizard' };
     default:
       return { name: 'select' };
   }
@@ -232,6 +236,9 @@ export function AddFlow(props: AddFlowProps) {
         break;
       case 'policy':
         setFlow({ name: 'policy-wizard' });
+        break;
+      case 'runtime-endpoint':
+        setFlow({ name: 'runtime-endpoint-wizard' });
         break;
     }
   }, []);
@@ -469,6 +476,18 @@ export function AddFlow(props: AddFlowProps) {
   if (flow.name === 'policy-wizard') {
     return (
       <AddPolicyFlow
+        isInteractive={props.isInteractive}
+        onExit={props.onExit}
+        onBack={() => setFlow({ name: 'select' })}
+        onDev={props.onDev}
+        onDeploy={props.onDeploy}
+      />
+    );
+  }
+
+  if (flow.name === 'runtime-endpoint-wizard') {
+    return (
+      <AddRuntimeEndpointFlow
         isInteractive={props.isInteractive}
         onExit={props.onExit}
         onBack={() => setFlow({ name: 'select' })}

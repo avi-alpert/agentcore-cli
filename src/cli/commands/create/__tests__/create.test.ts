@@ -265,18 +265,7 @@ describe('create command', () => {
       const projectName = `DryProj${Date.now().toString().slice(-6)}`;
       const agentName = `DryAgent${Date.now().toString().slice(-6)}`;
       const result = await runCLI(
-        [
-          'create',
-          '--project-name',
-          projectName,
-          '--name',
-          agentName,
-          '--defaults',
-          '--framework',
-          'Strands',
-          '--dry-run',
-          '--json',
-        ],
+        ['create', '--project-name', projectName, '--name', agentName, '--defaults', '--dry-run', '--json'],
         testDir
       );
 

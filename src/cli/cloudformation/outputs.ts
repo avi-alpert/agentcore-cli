@@ -7,6 +7,7 @@ import type {
   OnlineEvalDeployedState,
   PolicyDeployedState,
   PolicyEngineDeployedState,
+  RuntimeEndpointDeployedState,
   TargetDeployedState,
 } from '../../schema';
 import { getCredentialProvider } from '../aws';
@@ -339,6 +340,40 @@ export function parsePolicyOutputs(
   return policies;
 }
 
+/**
+ * Parse stack outputs into deployed state for runtime endpoints.
+ *
+ * Output key pattern: ApplicationAgent{AgentPascal}Endpoint{AgentPascal}{EndpointPascal}(Id|Arn)Output{Hash}
+ * The Agent{PascalName} prefix comes from the AgentEnvironment construct in the CDK tree.
+ */
+export function parseRuntimeEndpointOutputs(
+  outputs: StackOutputs,
+  endpointSpecs: { agentName: string; endpointName: string }[]
+): Record<string, RuntimeEndpointDeployedState> {
+  const endpoints: Record<string, RuntimeEndpointDeployedState> = {};
+  const outputKeys = Object.keys(outputs);
+
+  for (const { agentName, endpointName } of endpointSpecs) {
+    const agentPascal = toPascalId(agentName);
+    const endpointPascal = toPascalId('Endpoint', agentName, endpointName);
+    const idPrefix = `ApplicationAgent${agentPascal}${endpointPascal}IdOutput`;
+    const arnPrefix = `ApplicationAgent${agentPascal}${endpointPascal}ArnOutput`;
+
+    const idKey = outputKeys.find(k => k.startsWith(idPrefix));
+    const arnKey = outputKeys.find(k => k.startsWith(arnPrefix));
+
+    if (idKey && arnKey) {
+      const key = `${agentName}/${endpointName}`;
+      endpoints[key] = {
+        endpointId: outputs[idKey]!,
+        endpointArn: outputs[arnKey]!,
+      };
+    }
+  }
+
+  return endpoints;
+}
+
 export interface BuildDeployedStateOptions {
   targetName: string;
   stackName: string;
@@ -353,6 +388,7 @@ export interface BuildDeployedStateOptions {
   policyEngines?: Record<string, PolicyEngineDeployedState>;
   policies?: Record<string, PolicyDeployedState>;
   harnesses?: Record<string, HarnessDeployedState>;
+  runtimeEndpoints?: Record<string, RuntimeEndpointDeployedState>;
 }
 
 /**
@@ -373,6 +409,7 @@ export function buildDeployedState(opts: BuildDeployedStateOptions): DeployedSta
     policyEngines,
     policies,
     harnesses,
+    runtimeEndpoints,
   } = opts;
   const targetState: TargetDeployedState = {
     resources: {
@@ -410,6 +447,11 @@ export function buildDeployedState(opts: BuildDeployedStateOptions): DeployedSta
   // Add harness state if harnesses exist
   if (harnesses && Object.keys(harnesses).length > 0) {
     targetState.resources!.harnesses = harnesses;
+  }
+
+  // Add runtime endpoint state if endpoints exist
+  if (runtimeEndpoints && Object.keys(runtimeEndpoints).length > 0) {
+    targetState.resources!.runtimeEndpoints = runtimeEndpoints;
   }
 
   return {

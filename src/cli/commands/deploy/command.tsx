@@ -1,6 +1,6 @@
 import { getErrorMessage } from '../../errors';
 import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
-import { requireProject } from '../../tui/guards';
+import { requireProject, requireTTY } from '../../tui/guards';
 import { DeployScreen } from '../../tui/screens/deploy/DeployScreen';
 import { handleDeploy } from './actions';
 import { createSpinnerProgress } from './progress';
@@ -134,8 +134,10 @@ export const registerDeploy = (program: Command) => {
             await handleDeployCLI(options as DeployOptions);
           } else if (cliOptions.diff) {
             // Diff-only: use TUI with diff mode
+            requireTTY();
             handleDeployTUI({ diffMode: true });
           } else {
+            requireTTY();
             handleDeployTUI();
           }
         } catch (error) {
