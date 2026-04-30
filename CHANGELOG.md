@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.12.2] - 2026-04-30
+
+### Added
+- feat: add telemetry audit mode with FileSystemSink (#1014) (397c187)
+
+### Fixed
+- fix: add Accept header to HTTP protocol invocation proxy (#1051) (821e4c3)
+
+### Other Changes
+- fix(harness): add error handling for invoke_harness API call (#1056) (9a6a5d0)
+- Merge pull request #1054 from aws/fix/remove-coauthor-reland (0afeaf5)
+- refactor: move harness resources to .github/harness/ and use boto3 invoke_harness (ad2ba9b)
+- Revert "refactor: move harness resources to .github/harness/ (#992)" (b8a90c9)
+- refactor: move harness resources to .github/harness/ (#992) (aef3890)
+
 ## [0.12.1] - 2026-04-29
 
 ### Added
