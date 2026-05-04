@@ -1,6 +1,10 @@
 export interface InvokeOptions {
   agentName?: string;
   harnessName?: string;
+  /** Direct harness ARN — bypasses project config and deployed state resolution */
+  harnessArn?: string;
+  /** AWS region (used with --harness-arn) */
+  region?: string;
   targetName?: string;
   prompt?: string;
   /** Path to a file containing the prompt (alternative to --prompt / positional) */

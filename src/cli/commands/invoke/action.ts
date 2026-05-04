@@ -509,6 +509,143 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
 }
 
 // ============================================================================
+// Direct Harness Invoke by ARN (no project required)
+// ============================================================================
+
+export async function handleHarnessInvokeByArn(
+  harnessArn: string,
+  region: string,
+  options: InvokeOptions
+): Promise<InvokeResult> {
+  if (!options.prompt) {
+    return {
+      success: false,
+      error: 'No prompt provided. Usage: agentcore invoke --harness-arn <arn> --region <region> "your prompt"',
+    };
+  }
+
+  const sessionId = options.sessionId ?? randomUUID();
+  const logger = new InvokeLogger({ agentName: 'external-harness', runtimeArn: harnessArn, region, sessionId });
+  logger.logPrompt(options.prompt, sessionId, options.userId);
+
+  let fullResponse = '';
+  const dim = '\x1b[2m';
+  const reset = '\x1b[0m';
+  const cyan = '\x1b[36m';
+
+  const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
+  let spinnerInterval: NodeJS.Timeout | undefined;
+  let spinnerIdx = 0;
+  if (!options.json && !options.verbose) {
+    process.stderr.write(`${dim}${SPINNER[0]} Thinking...${reset}`);
+    spinnerInterval = setInterval(() => {
+      spinnerIdx = (spinnerIdx + 1) % SPINNER.length;
+      process.stderr.write(`\r${dim}${SPINNER[spinnerIdx]} Thinking...${reset}`);
+    }, 80);
+  }
+
+  let spinnerCleared = false;
+  const clearSpinner = () => {
+    if (spinnerInterval && !spinnerCleared) {
+      clearInterval(spinnerInterval);
+      spinnerCleared = true;
+      process.stderr.write('\r\x1b[K');
+    }
+  };
+
+  try {
+    const messages: { role: string; content: Record<string, unknown>[] }[] = [
+      { role: 'user', content: [{ text: options.prompt }] },
+    ];
+
+    const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
+    if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
+    if (options.tools) {
+      baseOpts.tools = options.tools.split(',').map(t => {
+        const type = t.trim();
+        return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
+      });
+    }
+    if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
+    if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
+    if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
+    if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
+    if (options.actorId) baseOpts.actorId = options.actorId;
+
+    const stream = invokeHarness({
+      region,
+      harnessArn,
+      runtimeSessionId: sessionId,
+      messages,
+      bearerToken: options.bearerToken,
+      ...baseOpts,
+    });
+
+    for await (const event of stream) {
+      if (options.verbose) {
+        clearSpinner();
+        console.log(JSON.stringify(event));
+        continue;
+      }
+
+      switch (event.type) {
+        case 'contentBlockDelta':
+          if (event.delta.type === 'text') {
+            clearSpinner();
+            fullResponse += event.delta.text;
+            if (!options.json) {
+              process.stdout.write(event.delta.text);
+            }
+          }
+          break;
+        case 'messageStop':
+          if (!options.json && !options.verbose) {
+            process.stdout.write('\n');
+          }
+          break;
+        case 'metadata':
+          if (!options.json) {
+            const { inputTokens, outputTokens } = event.usage;
+            const latency = (event.metrics.latencyMs / 1000).toFixed(1);
+            process.stderr.write(
+              `\n${dim}⚡ ${cyan}${inputTokens}${dim} in · ${cyan}${outputTokens}${dim} out · ${cyan}${latency}s${reset}\n`
+            );
+          }
+          break;
+        case 'error':
+          clearSpinner();
+          if (options.json) {
+            return { success: false, error: `${event.errorType}: ${event.message}` };
+          }
+          process.stderr.write(`\nError: ${event.message}\n`);
+          break;
+      }
+    }
+
+    logger.logResponse(fullResponse);
+
+    if (options.json) {
+      return {
+        success: true,
+        response: JSON.stringify({ text: fullResponse, sessionId }),
+        sessionId,
+        logFilePath: logger.logFilePath,
+      };
+    }
+
+    return { success: true, sessionId, logFilePath: logger.logFilePath };
+  } catch (err) {
+    clearSpinner();
+    logger.logError(err, 'harness invoke failed');
+    return {
+      success: false,
+      error: `Harness invoke failed: ${err instanceof Error ? err.message : String(err)}`,
+      logFilePath: logger.logFilePath,
+    };
+  }
+}
+
+// ============================================================================
 // Harness Invoke
 // ============================================================================
 
