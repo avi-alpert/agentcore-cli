@@ -295,6 +295,124 @@ describe('HarnessPrimitive', () => {
       );
     });
 
+    it('includes tools in harness spec when selectedTools provided', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        selectedTools: ['agentcore_browser', 'agentcore_code_interpreter'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          tools: [
+            { type: 'agentcore_browser', name: 'browser' },
+            { type: 'agentcore_code_interpreter', name: 'code-interpreter' },
+          ],
+        })
+      );
+    });
+
+    it('includes remote_mcp tool with config when mcpName and mcpUrl provided', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        selectedTools: ['remote_mcp'],
+        mcpName: 'my-mcp',
+        mcpUrl: 'https://mcp.example.com',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          tools: [
+            {
+              type: 'remote_mcp',
+              name: 'my-mcp',
+              config: { remoteMcp: { url: 'https://mcp.example.com' } },
+            },
+          ],
+        })
+      );
+    });
+
+    it('includes gateway tool with config when gatewayArn provided', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        selectedTools: ['agentcore_gateway'],
+        gatewayArn: 'arn:aws:bedrock:us-east-1:123456789012:gateway/my-gw',
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          tools: [
+            {
+              type: 'agentcore_gateway',
+              name: 'gateway',
+              config: {
+                agentCoreGateway: {
+                  gatewayArn: 'arn:aws:bedrock:us-east-1:123456789012:gateway/my-gw',
+                },
+              },
+            },
+          ],
+        })
+      );
+    });
+
+    it('includes gateway tool with outbound auth when gatewayOutboundAuth provided', async () => {
+      mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
+
+      const result = await primitive.add({
+        name: 'testHarness',
+        modelProvider: 'bedrock',
+        modelId: 'anthropic.claude-3-5-sonnet-20240620-v1:0',
+        selectedTools: ['agentcore_gateway'],
+        gatewayArn: 'arn:aws:bedrock:us-east-1:123456789012:gateway/my-gw',
+        gatewayOutboundAuth: 'oauth',
+        gatewayProviderArn: 'arn:aws:bedrock:us-east-1:123456789012:provider/my-provider',
+        gatewayScopes: ['read', 'write'],
+      });
+
+      expect(result.success).toBe(true);
+      expect(mockWriteHarnessSpec).toHaveBeenCalledWith(
+        'testHarness',
+        expect.objectContaining({
+          tools: [
+            {
+              type: 'agentcore_gateway',
+              name: 'gateway',
+              config: {
+                agentCoreGateway: {
+                  gatewayArn: 'arn:aws:bedrock:us-east-1:123456789012:gateway/my-gw',
+                  outboundAuth: {
+                    oauth: {
+                      providerArn: 'arn:aws:bedrock:us-east-1:123456789012:provider/my-provider',
+                      scopes: ['read', 'write'],
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        })
+      );
+    });
+
     it('includes system prompt when provided', async () => {
       mockReadProjectSpec.mockResolvedValue(JSON.parse(JSON.stringify(baseProject)));
 

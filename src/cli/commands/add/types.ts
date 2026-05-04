@@ -126,6 +126,14 @@ export interface AddHarnessCliOptions {
   maxLifetime?: number;
   sessionStorage?: string;
   withInvokeScript?: boolean;
+  systemPrompt?: string;
+  tools?: string;
+  mcpName?: string;
+  mcpUrl?: string;
+  gatewayArn?: string;
+  gatewayOutboundAuth?: string;
+  gatewayProviderArn?: string;
+  gatewayScopes?: string;
   authorizerType?: RuntimeAuthorizerType;
   discoveryUrl?: string;
   allowedAudience?: string;
