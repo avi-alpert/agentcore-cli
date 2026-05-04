@@ -2,6 +2,25 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.0.0-preview.7] - 2026-05-04
+
+### Added
+- feat: add --harness-arn flag to invoke harnesses without a CLI project (09e2a0e)
+
+### Fixed
+- fix: log warning when harness spec cannot be read during invoke (146541b)
+- fix: address review — exec guard, duplicate session print, conflicting flags (c2a8ddb)
+- fix: correct harness path and next steps in create summary (#1099) (a47bfa9)
+- fix: address review — extract shared harness streaming, fix verbose and dropped options (1f16334)
+- fix: add validation for --tools and gateway flags on add harness (ec1d18c)
+- fix: add --system-prompt, --tools, and gateway CLI flags to add harness (f72c986)
+
+### Other Changes
+- Merge pull request #1104 from aws/fix/invoke-harness-arn-flag (9198194)
+- Merge pull request #1098 from aws/fix/add-harness-system-prompt-tools-cli-flags-public (8fa4e6a)
+- Merge pull request #1081 from avi-alpert/aalpert/harness-tools-inspector (c9c0d07)
+- feat(agent-inspector): feat: add allowedTools and tools overrides to harness invocation API (14c9003)
+
 ## [1.0.0-preview.6] - 2026-05-01
 
 ### Added
