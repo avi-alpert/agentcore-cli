@@ -509,26 +509,64 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
 }
 
 // ============================================================================
-// Direct Harness Invoke by ARN (no project required)
+// Shared Harness Helpers
 // ============================================================================
 
-export async function handleHarnessInvokeByArn(
-  harnessArn: string,
-  region: string,
-  options: InvokeOptions
-): Promise<InvokeResult> {
-  if (!options.prompt) {
-    return {
-      success: false,
-      error: 'No prompt provided. Usage: agentcore invoke --harness-arn <arn> --region <region> "your prompt"',
-    };
+interface HarnessModel {
+  provider?: string;
+  modelId?: string;
+  apiKeyArn?: string;
+}
+
+function buildHarnessBaseOpts(
+  options: InvokeOptions,
+  harnessSpec?: HarnessModel
+): Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> {
+  const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
+  if (options.modelId || options.modelProvider || options.apiKeyArn) {
+    const provider = options.modelProvider ?? harnessSpec?.provider;
+    const modelId = options.modelId ?? harnessSpec?.modelId ?? '';
+    const apiKeyArn = options.apiKeyArn ?? harnessSpec?.apiKeyArn;
+    switch (provider) {
+      case 'open_ai':
+        baseOpts.model = { openAiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+        break;
+      case 'gemini':
+        baseOpts.model = { geminiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+        break;
+      default:
+        baseOpts.model = { bedrockModelConfig: { modelId } };
+        break;
+    }
   }
+  if (options.tools) {
+    baseOpts.tools = options.tools.split(',').map(t => {
+      const type = t.trim();
+      return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
+    });
+  }
+  if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
+  if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
+  if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
+  if (options.skills) baseOpts.skills = options.skills.split(',').map(p => ({ path: p.trim() }));
+  if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
+  if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
+  if (options.actorId) baseOpts.actorId = options.actorId;
+  return baseOpts;
+}
 
-  const sessionId = options.sessionId ?? randomUUID();
-  const logger = new InvokeLogger({ agentName: 'external-harness', runtimeArn: harnessArn, region, sessionId });
-  logger.logPrompt(options.prompt, sessionId, options.userId);
+interface StreamHarnessParams {
+  region: string;
+  harnessArn: string;
+  sessionId: string;
+  prompt: string;
+  options: InvokeOptions;
+  logger: InvokeLogger;
+  baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions>;
+}
 
-  let fullResponse = '';
+async function streamHarnessInvoke(params: StreamHarnessParams): Promise<InvokeResult> {
+  const { region, harnessArn, sessionId, prompt, options, logger, baseOpts } = params;
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';
   const cyan = '\x1b[36m';
@@ -553,72 +591,123 @@ export async function handleHarnessInvokeByArn(
     }
   };
 
+  let fullResponse = '';
+
   try {
     const messages: { role: string; content: Record<string, unknown>[] }[] = [
-      { role: 'user', content: [{ text: options.prompt }] },
+      { role: 'user', content: [{ text: prompt }] },
     ];
 
-    const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
-    if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
-    if (options.tools) {
-      baseOpts.tools = options.tools.split(',').map(t => {
-        const type = t.trim();
-        return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
+    let pendingToolUseId: string | undefined;
+    let pendingToolName: string | undefined;
+    let pendingToolInput = '';
+
+    let continueLoop = true;
+    while (continueLoop) {
+      continueLoop = false;
+
+      const stream = invokeHarness({
+        region,
+        harnessArn,
+        runtimeSessionId: sessionId,
+        messages,
+        bearerToken: options.bearerToken,
+        ...baseOpts,
       });
-    }
-    if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
-    if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
-    if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
-    if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
-    if (options.actorId) baseOpts.actorId = options.actorId;
 
-    const stream = invokeHarness({
-      region,
-      harnessArn,
-      runtimeSessionId: sessionId,
-      messages,
-      bearerToken: options.bearerToken,
-      ...baseOpts,
-    });
+      pendingToolUseId = undefined;
+      pendingToolName = undefined;
+      pendingToolInput = '';
 
-    for await (const event of stream) {
-      if (options.verbose) {
-        clearSpinner();
-        console.log(JSON.stringify(event));
-        continue;
-      }
-
-      switch (event.type) {
-        case 'contentBlockDelta':
-          if (event.delta.type === 'text') {
-            clearSpinner();
-            fullResponse += event.delta.text;
-            if (!options.json) {
-              process.stdout.write(event.delta.text);
-            }
-          }
-          break;
-        case 'messageStop':
-          if (!options.json && !options.verbose) {
-            process.stdout.write('\n');
-          }
-          break;
-        case 'metadata':
-          if (!options.json) {
-            const { inputTokens, outputTokens } = event.usage;
-            const latency = (event.metrics.latencyMs / 1000).toFixed(1);
-            process.stderr.write(
-              `\n${dim}⚡ ${cyan}${inputTokens}${dim} in · ${cyan}${outputTokens}${dim} out · ${cyan}${latency}s${reset}\n`
-            );
-          }
-          break;
-        case 'error':
+      for await (const event of stream) {
+        if (options.verbose) {
           clearSpinner();
-          if (options.json) {
-            return { success: false, error: `${event.errorType}: ${event.message}` };
-          }
-          process.stderr.write(`\nError: ${event.message}\n`);
-          break;
+          console.log(JSON.stringify(event));
+          continue;
+        }
+
+        switch (event.type) {
+          case 'contentBlockDelta':
+            if (event.delta.type === 'text') {
+              clearSpinner();
+              fullResponse += event.delta.text;
+              if (!options.json) {
+                process.stdout.write(event.delta.text);
+              }
+            } else if (event.delta.type === 'toolUse') {
+              pendingToolInput += event.delta.input;
+            } else if (event.delta.type === 'toolResult') {
+              const results = event.delta.results;
+              for (const r of results) {
+                const text = (r.text as string) ?? (r.json ? JSON.stringify(r.json) : '');
+                if (text) {
+                  logger.logInfo(`Tool output: ${text.slice(0, 200)}`);
+                }
+              }
+            }
+            break;
+          case 'contentBlockStart':
+            if (event.start.type === 'toolUse') {
+              pendingToolUseId = event.start.toolUse.toolUseId;
+              pendingToolName = event.start.toolUse.name;
+              pendingToolInput = '';
+              logger.logInfo(`Tool call: ${pendingToolName} (id: ${pendingToolUseId})`);
+              if (!options.json) {
+                const serverName = event.start.toolUse.serverName;
+                const label = serverName ? `${serverName}/${pendingToolName}` : pendingToolName;
+                process.stderr.write(`\n${dim}🔧 Tool: ${label}${reset}\n`);
+              }
+            } else if (event.start.type === 'toolResult') {
+              const status = event.start.toolResult.status ?? 'success';
+              logger.logInfo(`Tool result (${pendingToolName}): status=${status}`);
+              if (!options.json) {
+                const icon = status === 'error' ? '❌' : '✓';
+                process.stderr.write(`${dim}  ${icon} `);
+              }
+            }
+            break;
+          case 'messageStop':
+            if (event.stopReason === 'tool_use' && pendingToolUseId) {
+              clearSpinner();
+              let inputObj: Record<string, unknown> = {};
+              try {
+                inputObj = JSON.parse(pendingToolInput) as Record<string, unknown>;
+              } catch {
+                // use empty
+              }
+              logger.logInfo(`Tool input (${pendingToolName}): ${JSON.stringify(inputObj)}`);
+            } else if (event.stopReason === 'tool_result') {
+              if (!options.json) {
+                process.stderr.write(`${reset}\n`);
+              }
+            } else if (!options.json) {
+              process.stdout.write('\n');
+            }
+            break;
+          case 'metadata':
+            logger.logInfo(
+              `Tokens: ${event.usage.inputTokens} in, ${event.usage.outputTokens} out | Latency: ${event.metrics.latencyMs}ms`
+            );
+            if (!options.json) {
+              const { inputTokens, outputTokens } = event.usage;
+              const latency = (event.metrics.latencyMs / 1000).toFixed(1);
+              process.stderr.write(
+                `\n${dim}⚡ ${cyan}${inputTokens}${dim} in · ${cyan}${outputTokens}${dim} out · ${cyan}${latency}s${reset}\n`
+              );
+              process.stderr.write(
+                `${dim}🔗 Session: ${cyan}${sessionId}${dim} (use --session-id to continue)${reset}\n`
+              );
+            }
+            break;
+          case 'error':
+            clearSpinner();
+            logger.logError(new Error(`${event.errorType}: ${event.message}`), 'stream error');
+            if (options.json) {
+              return { success: false, error: `${event.errorType}: ${event.message}` };
+            }
+            process.stderr.write(`\nError: ${event.message}\n`);
+            break;
+        }
       }
     }
 
@@ -643,6 +732,30 @@ export async function handleHarnessInvokeByArn(
       logFilePath: logger.logFilePath,
     };
   }
+}
+
+// ============================================================================
+// Direct Harness Invoke by ARN (no project required)
+// ============================================================================
+
+export async function handleHarnessInvokeByArn(
+  harnessArn: string,
+  region: string,
+  options: InvokeOptions
+): Promise<InvokeResult> {
+  if (!options.prompt) {
+    return {
+      success: false,
+      error: 'No prompt provided. Usage: agentcore invoke --harness-arn <arn> --region <region> "your prompt"',
+    };
+  }
+
+  const sessionId = options.sessionId ?? randomUUID();
+  const logger = new InvokeLogger({ agentName: 'external-harness', runtimeArn: harnessArn, region, sessionId });
+  logger.logPrompt(options.prompt, sessionId, options.userId);
+
+  const baseOpts = buildHarnessBaseOpts(options);
+  return streamHarnessInvoke({ region, harnessArn, sessionId, prompt: options.prompt, options, logger, baseOpts });
 }
 
 // ============================================================================
@@ -805,199 +918,17 @@ async function handleHarnessInvoke(
   });
   logger.logPrompt(options.prompt, sessionId, options.userId);
 
-  let fullResponse = '';
-  const dim = '\x1b[2m';
-  const reset = '\x1b[0m';
-  const cyan = '\x1b[36m';
+  const baseOpts = buildHarnessBaseOpts(options, harnessSpec?.model);
 
-  const SPINNER = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
-  let spinnerInterval: NodeJS.Timeout | undefined;
-  let spinnerIdx = 0;
-  if (!options.json && !options.verbose) {
-    process.stderr.write(`${dim}${SPINNER[0]} Thinking...${reset}`);
-    spinnerInterval = setInterval(() => {
-      spinnerIdx = (spinnerIdx + 1) % SPINNER.length;
-      process.stderr.write(`\r${dim}${SPINNER[spinnerIdx]} Thinking...${reset}`);
-    }, 80);
-  }
+  const result = await streamHarnessInvoke({
+    region,
+    harnessArn: harnessState.harnessArn,
+    sessionId,
+    prompt: options.prompt,
+    options,
+    logger,
+    baseOpts,
+  });
 
-  let spinnerCleared = false;
-  const clearSpinner = () => {
-    if (spinnerInterval && !spinnerCleared) {
-      clearInterval(spinnerInterval);
-      spinnerCleared = true;
-      process.stderr.write('\r\x1b[K');
-    }
-  };
-
-  try {
-    const messages: { role: string; content: Record<string, unknown>[] }[] = [
-      { role: 'user', content: [{ text: options.prompt }] },
-    ];
-
-    const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
-    if (options.modelId || options.modelProvider || options.apiKeyArn) {
-      const provider = options.modelProvider ?? harnessSpec?.model?.provider;
-      const modelId = options.modelId ?? harnessSpec?.model?.modelId ?? '';
-      const apiKeyArn = options.apiKeyArn ?? harnessSpec?.model?.apiKeyArn;
-      switch (provider) {
-        case 'open_ai':
-          baseOpts.model = { openAiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
-          break;
-        case 'gemini':
-          baseOpts.model = { geminiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
-          break;
-        default:
-          baseOpts.model = { bedrockModelConfig: { modelId } };
-          break;
-      }
-    }
-    if (options.tools) {
-      baseOpts.tools = options.tools.split(',').map(t => {
-        const type = t.trim();
-        return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
-      });
-    }
-    if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
-    if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
-    if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
-    if (options.skills) baseOpts.skills = options.skills.split(',').map(p => ({ path: p.trim() }));
-    if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
-    if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
-    if (options.actorId) baseOpts.actorId = options.actorId;
-
-    let pendingToolUseId: string | undefined;
-    let pendingToolName: string | undefined;
-    let pendingToolInput = '';
-
-    let continueLoop = true;
-    while (continueLoop) {
-      continueLoop = false;
-
-      const stream = invokeHarness({
-        region,
-        harnessArn: harnessState.harnessArn,
-        runtimeSessionId: sessionId,
-        messages,
-        bearerToken: options.bearerToken,
-        ...baseOpts,
-      });
-
-      pendingToolUseId = undefined;
-      pendingToolName = undefined;
-      pendingToolInput = '';
-
-      for await (const event of stream) {
-        if (options.verbose) {
-          clearSpinner();
-          console.log(JSON.stringify(event));
-          continue;
-        }
-
-        switch (event.type) {
-          case 'contentBlockDelta':
-            if (event.delta.type === 'text') {
-              clearSpinner();
-              fullResponse += event.delta.text;
-              if (!options.json) {
-                process.stdout.write(event.delta.text);
-              }
-            } else if (event.delta.type === 'toolUse') {
-              pendingToolInput += event.delta.input;
-            } else if (event.delta.type === 'toolResult') {
-              const results = event.delta.results;
-              for (const r of results) {
-                const text = (r.text as string) ?? (r.json ? JSON.stringify(r.json) : '');
-                if (text) {
-                  logger.logInfo(`Tool output: ${text.slice(0, 200)}`);
-                }
-              }
-            }
-            break;
-          case 'contentBlockStart':
-            if (event.start.type === 'toolUse') {
-              pendingToolUseId = event.start.toolUse.toolUseId;
-              pendingToolName = event.start.toolUse.name;
-              pendingToolInput = '';
-              logger.logInfo(`Tool call: ${pendingToolName} (id: ${pendingToolUseId})`);
-              if (!options.json) {
-                const serverName = event.start.toolUse.serverName;
-                const label = serverName ? `${serverName}/${pendingToolName}` : pendingToolName;
-                process.stderr.write(`\n${dim}🔧 Tool: ${label}${reset}\n`);
-              }
-            } else if (event.start.type === 'toolResult') {
-              const status = event.start.toolResult.status ?? 'success';
-              logger.logInfo(`Tool result (${pendingToolName}): status=${status}`);
-              if (!options.json) {
-                const icon = status === 'error' ? '❌' : '✓';
-                process.stderr.write(`${dim}  ${icon} `);
-              }
-            }
-            break;
-          case 'messageStop':
-            if (event.stopReason === 'tool_use' && pendingToolUseId) {
-              clearSpinner();
-              let inputObj: Record<string, unknown> = {};
-              try {
-                inputObj = JSON.parse(pendingToolInput) as Record<string, unknown>;
-              } catch {
-                // use empty
-              }
-              logger.logInfo(`Tool input (${pendingToolName}): ${JSON.stringify(inputObj)}`);
-            } else if (event.stopReason === 'tool_result') {
-              if (!options.json) {
-                process.stderr.write(`${reset}\n`);
-              }
-            } else if (!options.json) {
-              process.stdout.write('\n');
-            }
-            break;
-          case 'metadata':
-            logger.logInfo(
-              `Tokens: ${event.usage.inputTokens} in, ${event.usage.outputTokens} out | Latency: ${event.metrics.latencyMs}ms`
-            );
-            if (!options.json) {
-              const { inputTokens, outputTokens } = event.usage;
-              const latency = (event.metrics.latencyMs / 1000).toFixed(1);
-              process.stderr.write(
-                `\n${dim}⚡ ${cyan}${inputTokens}${dim} in · ${cyan}${outputTokens}${dim} out · ${cyan}${latency}s${reset}\n`
-              );
-              process.stderr.write(
-                `${dim}🔗 Session: ${cyan}${sessionId}${dim} (use --session-id to continue)${reset}\n`
-              );
-            }
-            break;
-          case 'error':
-            clearSpinner();
-            logger.logError(new Error(`${event.errorType}: ${event.message}`), 'stream error');
-            if (options.json) {
-              return { success: false, error: `${event.errorType}: ${event.message}` };
-            }
-            process.stderr.write(`\nError: ${event.message}\n`);
-            break;
-        }
-      }
-    }
-
-    logger.logResponse(fullResponse);
-
-    if (options.json) {
-      return {
-        success: true,
-        targetName: selectedTargetName,
-        response: JSON.stringify({ text: fullResponse, sessionId }),
-        logFilePath: logger.logFilePath,
-      };
-    }
-
-    return { success: true, targetName: selectedTargetName, logFilePath: logger.logFilePath };
-  } catch (err) {
-    clearSpinner();
-    logger.logError(err, 'harness invoke failed');
-    return {
-      success: false,
-      error: `Harness invoke failed: ${err instanceof Error ? err.message : String(err)}`,
-      logFilePath: logger.logFilePath,
-    };
-  }
+  return { ...result, targetName: selectedTargetName };
 }
