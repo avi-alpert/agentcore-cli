@@ -806,13 +806,25 @@ async function handleHarnessInvoke(
     };
   }
 
+  const sessionId = options.sessionId ?? randomUUID();
+  const region = targetConfig.region;
+
+  const logger = new InvokeLogger({
+    agentName: harnessName,
+    runtimeArn: harnessState.harnessArn,
+    region,
+    sessionId,
+  });
+
   // Read harness spec for auth config
   const configIO = new ConfigIO();
   let harnessSpec;
   try {
     harnessSpec = await configIO.readHarnessSpec(harnessName);
-  } catch {
-    // If we can't read the spec, continue without auto-fetch
+  } catch (err) {
+    logger.logInfo(
+      `Could not read harness spec for '${harnessName}': ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   // Auto-fetch bearer token for CUSTOM_JWT harnesses when not provided
@@ -907,15 +919,6 @@ async function handleHarnessInvoke(
     return { success: false, error: 'No prompt provided. Usage: agentcore invoke --harness <name> "your prompt"' };
   }
 
-  const sessionId = options.sessionId ?? randomUUID();
-  const region = targetConfig.region;
-
-  const logger = new InvokeLogger({
-    agentName: harnessName,
-    runtimeArn: harnessState.harnessArn,
-    region,
-    sessionId,
-  });
   logger.logPrompt(options.prompt, sessionId, options.userId);
 
   const baseOpts = buildHarnessBaseOpts(options, harnessSpec?.model);
