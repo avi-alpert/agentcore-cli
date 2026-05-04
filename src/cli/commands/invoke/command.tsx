@@ -3,7 +3,7 @@ import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
 import { requireProject, requireTTY } from '../../tui/guards';
 import { InvokeScreen } from '../../tui/screens/invoke';
 import { parseHeaderFlags } from '../shared/header-utils';
-import { handleInvoke, loadInvokeConfig } from './action';
+import { handleHarnessInvokeByArn, handleInvoke, loadInvokeConfig } from './action';
 import { resolvePrompt } from './resolve-prompt';
 import type { InvokeOptions } from './types';
 import { validateInvokeOptions } from './validate';
@@ -41,6 +41,26 @@ async function handleInvokeCLI(options: InvokeOptions): Promise<void> {
   let spinner: NodeJS.Timeout | undefined;
 
   try {
+    if (options.harnessArn) {
+      const region = options.region ?? process.env.AWS_REGION ?? process.env.AWS_DEFAULT_REGION;
+      if (!region) {
+        const msg = '--region is required with --harness-arn (or set AWS_REGION)';
+        if (options.json) {
+          console.log(JSON.stringify({ success: false, error: msg }));
+        } else {
+          console.error(msg);
+        }
+        process.exit(1);
+      }
+      const result = await handleHarnessInvokeByArn(options.harnessArn, region, options);
+      if (options.json) {
+        console.log(JSON.stringify(result));
+      } else if (!result.success && result.error) {
+        console.error(result.error);
+      }
+      process.exit(result.success ? 0 : 1);
+    }
+
     const context = await loadInvokeConfig();
 
     // Show spinner for non-streaming, non-json, non-exec invocations
@@ -131,6 +151,8 @@ export const registerInvoke = (program: Command) => {
     )
     .option('--bearer-token <token>', 'Bearer token for CUSTOM_JWT auth (bypasses SigV4) [non-interactive]')
     .option('--harness <name>', 'Select specific harness to invoke [non-interactive]')
+    .option('--harness-arn <arn>', 'Invoke a harness by ARN (no project required) [non-interactive]')
+    .option('--region <region>', 'AWS region (required with --harness-arn when no project) [non-interactive]')
     .option('--verbose', 'Print verbose streaming JSON events (harness only) [non-interactive]')
     .option('--model-id <id>', 'Override model for this invocation (harness only) [non-interactive]')
     .option(
@@ -165,6 +187,8 @@ export const registerInvoke = (program: Command) => {
           header?: string[];
           bearerToken?: string;
           harness?: string;
+          harnessArn?: string;
+          region?: string;
           verbose?: boolean;
           modelId?: string;
           modelProvider?: string;
@@ -180,7 +204,9 @@ export const registerInvoke = (program: Command) => {
         }
       ) => {
         try {
-          requireProject();
+          if (!cliOptions.harnessArn) {
+            requireProject();
+          }
           // Resolve prompt from flag / positional / --prompt-file / stdin
           const resolved = await resolvePrompt({
             flag: cliOptions.prompt,
@@ -215,12 +241,15 @@ export const registerInvoke = (program: Command) => {
             cliOptions.exec ||
             cliOptions.bearerToken ||
             cliOptions.harness ||
+            cliOptions.harnessArn ||
             cliOptions.verbose
           ) {
             await handleInvokeCLI({
               prompt,
               agentName: cliOptions.runtime,
               harnessName: cliOptions.harness,
+              harnessArn: cliOptions.harnessArn,
+              region: cliOptions.region,
               targetName: cliOptions.target ?? 'default',
               sessionId: cliOptions.sessionId,
               userId: cliOptions.userId,

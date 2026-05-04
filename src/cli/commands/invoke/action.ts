@@ -509,166 +509,64 @@ export async function handleInvoke(context: InvokeContext, options: InvokeOption
 }
 
 // ============================================================================
-// Harness Invoke
+// Shared Harness Helpers
 // ============================================================================
 
-async function handleHarnessInvoke(
-  project: AgentCoreProjectSpec,
-  targetState: DeployedState['targets'][string] | undefined,
-  targetConfig: { region: string; name: string },
-  selectedTargetName: string,
-  options: InvokeOptions
-): Promise<InvokeResult> {
-  const harnessEntries = project.harnesses ?? [];
+interface HarnessModel {
+  provider?: string;
+  modelId?: string;
+  apiKeyArn?: string;
+}
 
-  if (harnessEntries.length === 0) {
-    return { success: false, error: 'No harnesses defined in configuration' };
-  }
-
-  // Resolve harness name — explicit flag, or auto-infer if only one
-  let harnessName = options.harnessName;
-  if (!harnessName) {
-    if (harnessEntries.length > 1) {
-      const names = harnessEntries.map(h => h.name);
-      return {
-        success: false,
-        error: `Multiple harnesses found. Use --harness to specify one: ${names.join(', ')}`,
-      };
-    }
-    harnessName = harnessEntries[0]!.name;
-  }
-
-  const harnessEntry = harnessEntries.find(h => h.name === harnessName);
-  if (!harnessEntry) {
-    const names = harnessEntries.map(h => h.name);
-    return {
-      success: false,
-      error: `Harness '${harnessName}' not found. Available: ${names.join(', ')}`,
-    };
-  }
-
-  // Get deployed state for this harness
-  const harnessState = targetState?.resources?.harnesses?.[harnessName];
-  if (!harnessState) {
-    return {
-      success: false,
-      error: `Harness '${harnessName}' is not deployed to target '${selectedTargetName}'. Run \`agentcore deploy\` first.`,
-    };
-  }
-
-  // Read harness spec for auth config
-  const configIO = new ConfigIO();
-  let harnessSpec;
-  try {
-    harnessSpec = await configIO.readHarnessSpec(harnessName);
-  } catch {
-    // If we can't read the spec, continue without auto-fetch
-  }
-
-  // Auto-fetch bearer token for CUSTOM_JWT harnesses when not provided
-  if (harnessSpec?.authorizerType === 'CUSTOM_JWT' && !options.bearerToken) {
-    const canFetch = await canFetchHarnessToken(harnessName);
-    if (canFetch) {
-      try {
-        const tokenResult = await fetchHarnessToken(harnessName, { deployTarget: selectedTargetName });
-        options = { ...options, bearerToken: tokenResult.token };
-      } catch (err) {
-        return {
-          success: false,
-          error: `CUSTOM_JWT harness requires a bearer token. Auto-fetch failed: ${err instanceof Error ? err.message : String(err)}\nProvide one manually with --bearer-token.`,
-        };
-      }
-    } else {
-      return {
-        success: false,
-        error: `Harness '${harnessName}' is configured for CUSTOM_JWT but no bearer token is available.\nEither provide --bearer-token or re-add the harness with --client-id and --client-secret to enable auto-fetch.`,
-      };
+function buildHarnessBaseOpts(
+  options: InvokeOptions,
+  harnessSpec?: HarnessModel
+): Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> {
+  const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
+  if (options.modelId || options.modelProvider || options.apiKeyArn) {
+    const provider = options.modelProvider ?? harnessSpec?.provider;
+    const modelId = options.modelId ?? harnessSpec?.modelId ?? '';
+    const apiKeyArn = options.apiKeyArn ?? harnessSpec?.apiKeyArn;
+    switch (provider) {
+      case 'open_ai':
+        baseOpts.model = { openAiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+        break;
+      case 'gemini':
+        baseOpts.model = { geminiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
+        break;
+      default:
+        baseOpts.model = { bedrockModelConfig: { modelId } };
+        break;
     }
   }
-
-  // Exec mode: run shell command on harness VM via InvokeAgentRuntimeCommand
-  if (options.exec) {
-    const command = options.prompt;
-    if (!command) {
-      return {
-        success: false,
-        error: '--exec requires a command. Usage: agentcore invoke --exec --harness <name> "ls -la"',
-      };
-    }
-
-    try {
-      const result = await executeBashCommand({
-        region: targetConfig.region,
-        runtimeArn: harnessState.harnessArn,
-        command,
-        sessionId: options.sessionId,
-        timeout: options.timeout,
-      });
-
-      let stdout = '';
-      let stderr = '';
-      let exitCode: number | undefined;
-      let status: string | undefined;
-
-      for await (const event of result.stream) {
-        switch (event.type) {
-          case 'stdout':
-            if (event.data) {
-              stdout += event.data;
-              if (!options.json) process.stdout.write(event.data);
-            }
-            break;
-          case 'stderr':
-            if (event.data) {
-              stderr += event.data;
-              if (!options.json) process.stderr.write(event.data);
-            }
-            break;
-          case 'stop':
-            exitCode = event.exitCode;
-            status = event.status;
-            break;
-        }
-      }
-
-      if (options.json) {
-        return {
-          success: exitCode === 0,
-          targetName: selectedTargetName,
-          response: JSON.stringify({ stdout, stderr, exitCode, status }),
-        };
-      }
-
-      if (exitCode !== 0) {
-        return {
-          success: false,
-          targetName: selectedTargetName,
-          error: `Command exited with code ${exitCode}${status === 'TIMED_OUT' ? ' (timed out)' : ''}`,
-        };
-      }
-
-      return { success: true, targetName: selectedTargetName };
-    } catch (err) {
-      return { success: false, error: `Exec failed: ${err instanceof Error ? err.message : String(err)}` };
-    }
+  if (options.tools) {
+    baseOpts.tools = options.tools.split(',').map(t => {
+      const type = t.trim();
+      return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
+    });
   }
+  if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
+  if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
+  if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
+  if (options.skills) baseOpts.skills = options.skills.split(',').map(p => ({ path: p.trim() }));
+  if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
+  if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
+  if (options.actorId) baseOpts.actorId = options.actorId;
+  return baseOpts;
+}
 
-  if (!options.prompt) {
-    return { success: false, error: 'No prompt provided. Usage: agentcore invoke --harness <name> "your prompt"' };
-  }
+interface StreamHarnessParams {
+  region: string;
+  harnessArn: string;
+  sessionId: string;
+  prompt: string;
+  options: InvokeOptions;
+  logger: InvokeLogger;
+  baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions>;
+}
 
-  const sessionId = options.sessionId ?? randomUUID();
-  const region = targetConfig.region;
-
-  const logger = new InvokeLogger({
-    agentName: harnessName,
-    runtimeArn: harnessState.harnessArn,
-    region,
-    sessionId,
-  });
-  logger.logPrompt(options.prompt, sessionId, options.userId);
-
-  let fullResponse = '';
+async function streamHarnessInvoke(params: StreamHarnessParams): Promise<InvokeResult> {
+  const { region, harnessArn, sessionId, prompt, options, logger, baseOpts } = params;
   const dim = '\x1b[2m';
   const reset = '\x1b[0m';
   const cyan = '\x1b[36m';
@@ -693,41 +591,12 @@ async function handleHarnessInvoke(
     }
   };
 
+  let fullResponse = '';
+
   try {
     const messages: { role: string; content: Record<string, unknown>[] }[] = [
-      { role: 'user', content: [{ text: options.prompt }] },
+      { role: 'user', content: [{ text: prompt }] },
     ];
-
-    const baseOpts: Partial<import('../../aws/agentcore-harness').InvokeHarnessOptions> = {};
-    if (options.modelId || options.modelProvider || options.apiKeyArn) {
-      const provider = options.modelProvider ?? harnessSpec?.model?.provider;
-      const modelId = options.modelId ?? harnessSpec?.model?.modelId ?? '';
-      const apiKeyArn = options.apiKeyArn ?? harnessSpec?.model?.apiKeyArn;
-      switch (provider) {
-        case 'open_ai':
-          baseOpts.model = { openAiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
-          break;
-        case 'gemini':
-          baseOpts.model = { geminiModelConfig: { modelId, ...(apiKeyArn && { apiKeyArn }) } };
-          break;
-        default:
-          baseOpts.model = { bedrockModelConfig: { modelId } };
-          break;
-      }
-    }
-    if (options.tools) {
-      baseOpts.tools = options.tools.split(',').map(t => {
-        const type = t.trim();
-        return { type, name: TOOL_TYPE_DEFAULT_NAMES[type] ?? type };
-      });
-    }
-    if (options.maxIterations != null) baseOpts.maxIterations = options.maxIterations;
-    if (options.maxTokens != null) baseOpts.maxTokens = options.maxTokens;
-    if (options.harnessTimeout != null) baseOpts.timeoutSeconds = options.harnessTimeout;
-    if (options.skills) baseOpts.skills = options.skills.split(',').map(p => ({ path: p.trim() }));
-    if (options.systemPrompt) baseOpts.systemPrompt = [{ text: options.systemPrompt }];
-    if (options.allowedTools) baseOpts.allowedTools = options.allowedTools.split(',').map(t => t.trim());
-    if (options.actorId) baseOpts.actorId = options.actorId;
 
     let pendingToolUseId: string | undefined;
     let pendingToolName: string | undefined;
@@ -739,7 +608,7 @@ async function handleHarnessInvoke(
 
       const stream = invokeHarness({
         region,
-        harnessArn: harnessState.harnessArn,
+        harnessArn,
         runtimeSessionId: sessionId,
         messages,
         bearerToken: options.bearerToken,
@@ -847,13 +716,13 @@ async function handleHarnessInvoke(
     if (options.json) {
       return {
         success: true,
-        targetName: selectedTargetName,
         response: JSON.stringify({ text: fullResponse, sessionId }),
+        sessionId,
         logFilePath: logger.logFilePath,
       };
     }
 
-    return { success: true, targetName: selectedTargetName, logFilePath: logger.logFilePath };
+    return { success: true, logFilePath: logger.logFilePath };
   } catch (err) {
     clearSpinner();
     logger.logError(err, 'harness invoke failed');
@@ -863,4 +732,206 @@ async function handleHarnessInvoke(
       logFilePath: logger.logFilePath,
     };
   }
+}
+
+// ============================================================================
+// Direct Harness Invoke by ARN (no project required)
+// ============================================================================
+
+export async function handleHarnessInvokeByArn(
+  harnessArn: string,
+  region: string,
+  options: InvokeOptions
+): Promise<InvokeResult> {
+  if (!options.prompt) {
+    return {
+      success: false,
+      error: 'No prompt provided. Usage: agentcore invoke --harness-arn <arn> --region <region> "your prompt"',
+    };
+  }
+
+  const sessionId = options.sessionId ?? randomUUID();
+  const logger = new InvokeLogger({ agentName: 'external-harness', runtimeArn: harnessArn, region, sessionId });
+  logger.logPrompt(options.prompt, sessionId, options.userId);
+
+  const baseOpts = buildHarnessBaseOpts(options);
+  return streamHarnessInvoke({ region, harnessArn, sessionId, prompt: options.prompt, options, logger, baseOpts });
+}
+
+// ============================================================================
+// Harness Invoke
+// ============================================================================
+
+async function handleHarnessInvoke(
+  project: AgentCoreProjectSpec,
+  targetState: DeployedState['targets'][string] | undefined,
+  targetConfig: { region: string; name: string },
+  selectedTargetName: string,
+  options: InvokeOptions
+): Promise<InvokeResult> {
+  const harnessEntries = project.harnesses ?? [];
+
+  if (harnessEntries.length === 0) {
+    return { success: false, error: 'No harnesses defined in configuration' };
+  }
+
+  // Resolve harness name — explicit flag, or auto-infer if only one
+  let harnessName = options.harnessName;
+  if (!harnessName) {
+    if (harnessEntries.length > 1) {
+      const names = harnessEntries.map(h => h.name);
+      return {
+        success: false,
+        error: `Multiple harnesses found. Use --harness to specify one: ${names.join(', ')}`,
+      };
+    }
+    harnessName = harnessEntries[0]!.name;
+  }
+
+  const harnessEntry = harnessEntries.find(h => h.name === harnessName);
+  if (!harnessEntry) {
+    const names = harnessEntries.map(h => h.name);
+    return {
+      success: false,
+      error: `Harness '${harnessName}' not found. Available: ${names.join(', ')}`,
+    };
+  }
+
+  // Get deployed state for this harness
+  const harnessState = targetState?.resources?.harnesses?.[harnessName];
+  if (!harnessState) {
+    return {
+      success: false,
+      error: `Harness '${harnessName}' is not deployed to target '${selectedTargetName}'. Run \`agentcore deploy\` first.`,
+    };
+  }
+
+  const sessionId = options.sessionId ?? randomUUID();
+  const region = targetConfig.region;
+
+  const logger = new InvokeLogger({
+    agentName: harnessName,
+    runtimeArn: harnessState.harnessArn,
+    region,
+    sessionId,
+  });
+
+  // Read harness spec for auth config
+  const configIO = new ConfigIO();
+  let harnessSpec;
+  try {
+    harnessSpec = await configIO.readHarnessSpec(harnessName);
+  } catch (err) {
+    logger.logInfo(
+      `Could not read harness spec for '${harnessName}': ${err instanceof Error ? err.message : String(err)}`
+    );
+  }
+
+  // Auto-fetch bearer token for CUSTOM_JWT harnesses when not provided
+  if (harnessSpec?.authorizerType === 'CUSTOM_JWT' && !options.bearerToken) {
+    const canFetch = await canFetchHarnessToken(harnessName);
+    if (canFetch) {
+      try {
+        const tokenResult = await fetchHarnessToken(harnessName, { deployTarget: selectedTargetName });
+        options = { ...options, bearerToken: tokenResult.token };
+      } catch (err) {
+        return {
+          success: false,
+          error: `CUSTOM_JWT harness requires a bearer token. Auto-fetch failed: ${err instanceof Error ? err.message : String(err)}\nProvide one manually with --bearer-token.`,
+        };
+      }
+    } else {
+      return {
+        success: false,
+        error: `Harness '${harnessName}' is configured for CUSTOM_JWT but no bearer token is available.\nEither provide --bearer-token or re-add the harness with --client-id and --client-secret to enable auto-fetch.`,
+      };
+    }
+  }
+
+  // Exec mode: run shell command on harness VM via InvokeAgentRuntimeCommand
+  if (options.exec) {
+    const command = options.prompt;
+    if (!command) {
+      return {
+        success: false,
+        error: '--exec requires a command. Usage: agentcore invoke --exec --harness <name> "ls -la"',
+      };
+    }
+
+    try {
+      const result = await executeBashCommand({
+        region: targetConfig.region,
+        runtimeArn: harnessState.harnessArn,
+        command,
+        sessionId: options.sessionId,
+        timeout: options.timeout,
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let exitCode: number | undefined;
+      let status: string | undefined;
+
+      for await (const event of result.stream) {
+        switch (event.type) {
+          case 'stdout':
+            if (event.data) {
+              stdout += event.data;
+              if (!options.json) process.stdout.write(event.data);
+            }
+            break;
+          case 'stderr':
+            if (event.data) {
+              stderr += event.data;
+              if (!options.json) process.stderr.write(event.data);
+            }
+            break;
+          case 'stop':
+            exitCode = event.exitCode;
+            status = event.status;
+            break;
+        }
+      }
+
+      if (options.json) {
+        return {
+          success: exitCode === 0,
+          targetName: selectedTargetName,
+          response: JSON.stringify({ stdout, stderr, exitCode, status }),
+        };
+      }
+
+      if (exitCode !== 0) {
+        return {
+          success: false,
+          targetName: selectedTargetName,
+          error: `Command exited with code ${exitCode}${status === 'TIMED_OUT' ? ' (timed out)' : ''}`,
+        };
+      }
+
+      return { success: true, targetName: selectedTargetName };
+    } catch (err) {
+      return { success: false, error: `Exec failed: ${err instanceof Error ? err.message : String(err)}` };
+    }
+  }
+
+  if (!options.prompt) {
+    return { success: false, error: 'No prompt provided. Usage: agentcore invoke --harness <name> "your prompt"' };
+  }
+
+  logger.logPrompt(options.prompt, sessionId, options.userId);
+
+  const baseOpts = buildHarnessBaseOpts(options, harnessSpec?.model);
+
+  const result = await streamHarnessInvoke({
+    region,
+    harnessArn: harnessState.harnessArn,
+    sessionId,
+    prompt: options.prompt,
+    options,
+    logger,
+    baseOpts,
+  });
+
+  return { ...result, targetName: selectedTargetName };
 }

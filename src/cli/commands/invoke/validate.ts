@@ -6,11 +6,17 @@ export interface ValidationResult {
 }
 
 export function validateInvokeOptions(options: InvokeOptions): ValidationResult {
+  if (options.harnessArn && (options.harnessName || options.agentName)) {
+    return { valid: false, error: '--harness-arn cannot be combined with --harness or --runtime' };
+  }
+  if (options.harnessArn && options.exec) {
+    return { valid: false, error: '--exec is not supported with --harness-arn' };
+  }
   if (options.harnessName && options.agentName) {
     return { valid: false, error: '--harness and --runtime cannot be used together' };
   }
-  if (options.verbose && !options.harnessName) {
-    return { valid: false, error: '--verbose is only supported with --harness' };
+  if (options.verbose && !options.harnessName && !options.harnessArn) {
+    return { valid: false, error: '--verbose is only supported with --harness or --harness-arn' };
   }
   if (options.exec && !options.prompt) {
     return { valid: false, error: 'A command is required with --exec. Usage: agentcore invoke --exec "ls -la"' };
