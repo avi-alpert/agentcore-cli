@@ -722,7 +722,7 @@ async function streamHarnessInvoke(params: StreamHarnessParams): Promise<InvokeR
       };
     }
 
-    return { success: true, sessionId, logFilePath: logger.logFilePath };
+    return { success: true, logFilePath: logger.logFilePath };
   } catch (err) {
     clearSpinner();
     logger.logError(err, 'harness invoke failed');

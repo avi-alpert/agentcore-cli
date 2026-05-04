@@ -55,12 +55,8 @@ async function handleInvokeCLI(options: InvokeOptions): Promise<void> {
       const result = await handleHarnessInvokeByArn(options.harnessArn, region, options);
       if (options.json) {
         console.log(JSON.stringify(result));
-      }
-      if (result.sessionId && !options.json) {
-        console.error(`\nSession: ${result.sessionId}`);
-        console.error(
-          `To resume: agentcore invoke --harness-arn ${options.harnessArn} --region ${region} --session-id ${result.sessionId}`
-        );
+      } else if (!result.success && result.error) {
+        console.error(result.error);
       }
       process.exit(result.success ? 0 : 1);
     }
