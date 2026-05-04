@@ -342,6 +342,23 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
       .option('--max-lifetime <seconds>', 'Max lifetime in seconds', parseInt)
       .option('--session-storage <path>', 'Mount path for persistent session storage (e.g., /mnt/data/)')
       .option('--with-invoke-script', 'Generate a standalone Python invoke script')
+      .option(
+        '--system-prompt <text>',
+        'System prompt text (written to system-prompt.md; defaults to "You are a helpful assistant")'
+      )
+      .option(
+        '--tools <tools>',
+        'Comma-separated tools: agentcore_browser, agentcore_code_interpreter, remote_mcp, agentcore_gateway'
+      )
+      .option('--mcp-name <name>', 'Remote MCP tool name (required when --tools includes remote_mcp)')
+      .option('--mcp-url <url>', 'Remote MCP endpoint URL (required when --tools includes remote_mcp)')
+      .option('--gateway-arn <arn>', 'Gateway ARN (required when --tools includes agentcore_gateway)')
+      .option(
+        '--gateway-outbound-auth <type>',
+        'Gateway outbound auth: awsIam, none, oauth (requires --gateway-provider-arn and --gateway-scopes)'
+      )
+      .option('--gateway-provider-arn <arn>', 'OAuth provider ARN for gateway outbound auth')
+      .option('--gateway-scopes <scopes>', 'Comma-separated OAuth scopes for gateway outbound auth')
       .option('--authorizer-type <type>', 'Authorizer type: AWS_IAM or CUSTOM_JWT')
       .option('--discovery-url <url>', 'OIDC discovery URL (for CUSTOM_JWT)')
       .option('--allowed-audience <audiences>', 'Comma-separated allowed audiences (for CUSTOM_JWT)')
@@ -370,6 +387,14 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
           maxLifetime?: number;
           sessionStorage?: string;
           withInvokeScript?: boolean;
+          systemPrompt?: string;
+          tools?: string;
+          mcpName?: string;
+          mcpUrl?: string;
+          gatewayArn?: string;
+          gatewayOutboundAuth?: string;
+          gatewayProviderArn?: string;
+          gatewayScopes?: string;
           authorizerType?: string;
           discoveryUrl?: string;
           allowedAudience?: string;
@@ -437,6 +462,14 @@ export class HarnessPrimitive extends BasePrimitive<AddHarnessOptions, Removable
                 maxLifetime: cliOptions.maxLifetime,
                 sessionStoragePath: cliOptions.sessionStorage,
                 withInvokeScript: cliOptions.withInvokeScript,
+                systemPrompt: cliOptions.systemPrompt,
+                selectedTools: cliOptions.tools?.split(',').map(s => s.trim()),
+                mcpName: cliOptions.mcpName,
+                mcpUrl: cliOptions.mcpUrl,
+                gatewayArn: cliOptions.gatewayArn,
+                gatewayOutboundAuth: cliOptions.gatewayOutboundAuth as 'awsIam' | 'none' | 'oauth' | undefined,
+                gatewayProviderArn: cliOptions.gatewayProviderArn,
+                gatewayScopes: cliOptions.gatewayScopes?.split(',').map(s => s.trim()),
                 authorizerType: cliOptions.authorizerType as RuntimeAuthorizerType | undefined,
                 jwtConfig:
                   cliOptions.authorizerType === 'CUSTOM_JWT' && cliOptions.discoveryUrl
