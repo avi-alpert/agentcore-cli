@@ -5694,7 +5694,8 @@ Thumbs.db
 `;
 
 exports[`Assets Directory Snapshots > TypeScript assets > typescript/typescript/http/strands/base/main.ts should match snapshot 1`] = `
-"import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
+"import './otel-register.js';
+import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { Agent, tool } from '@strands-agents/sdk';
 import { loadModel } from './model/load.js';
 {{#if hasGateway}}
@@ -6023,9 +6024,9 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { Resource } from '@opentelemetry/resources';
 
-const resource = resourceFromAttributes({
+const resource = new Resource({
   'service.name': process.env.AGENTCORE_RUNTIME_NAME ?? 'agentcore-runtime',
 });
 
@@ -6177,7 +6178,8 @@ Thumbs.db
 `;
 
 exports[`Assets Directory Snapshots > TypeScript assets > typescript/typescript/http/vercelai/base/main.ts should match snapshot 1`] = `
-"import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
+"import './otel-register.js';
+import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { streamText } from 'ai';
 import { loadModel } from './model/load.js';
 
@@ -6307,9 +6309,9 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { Resource } from '@opentelemetry/resources';
 
-const resource = resourceFromAttributes({
+const resource = new Resource({
   'service.name': process.env.AGENTCORE_RUNTIME_NAME ?? 'agentcore-runtime',
 });
 
