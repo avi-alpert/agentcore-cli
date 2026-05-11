@@ -3,9 +3,9 @@ import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-base';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import { resourceFromAttributes } from '@opentelemetry/resources';
+import { Resource } from '@opentelemetry/resources';
 
-const resource = resourceFromAttributes({
+const resource = new Resource({
   'service.name': process.env.AGENTCORE_RUNTIME_NAME ?? 'agentcore-runtime',
 });
 
