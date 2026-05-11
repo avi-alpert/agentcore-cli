@@ -277,6 +277,65 @@ export function resolveProjectPathsSync(options: PackageOptions = {}, agentName?
   };
 }
 
+export async function resolveNodeProjectPaths(
+  options: PackageOptions = {},
+  agentName?: string
+): Promise<ResolvedPaths> {
+  const startDir = options.projectRoot ? resolve(options.projectRoot) : process.cwd();
+  const candidatePackageJson = await findUp('package.json', startDir);
+
+  if (!candidatePackageJson || !(await pathExists(candidatePackageJson))) {
+    throw new MissingProjectFileError(join(startDir, 'package.json'));
+  }
+
+  const projectRoot = options.projectRoot ? resolve(options.projectRoot) : dirname(candidatePackageJson);
+  const srcDir = resolve(projectRoot, options.srcDir ?? '.');
+  const artifactDir = resolve(options.artifactDir ?? join(projectRoot, CONFIG_DIR));
+
+  const name = agentName ?? 'default';
+  const buildDir = join(artifactDir, name);
+  const stagingDir = join(buildDir, 'staging');
+  const artifactsDir = artifactDir;
+
+  return {
+    projectRoot,
+    srcDir,
+    pyprojectPath: candidatePackageJson,
+    artifactDir,
+    buildDir,
+    stagingDir,
+    artifactsDir,
+  };
+}
+
+export function resolveNodeProjectPathsSync(options: PackageOptions = {}, agentName?: string): ResolvedPaths {
+  const startDir = options.projectRoot ? resolve(options.projectRoot) : process.cwd();
+  const candidatePackageJson = findUpSync('package.json', startDir);
+
+  if (!candidatePackageJson || !pathExistsSync(candidatePackageJson)) {
+    throw new MissingProjectFileError(join(startDir, 'package.json'));
+  }
+
+  const projectRoot = options.projectRoot ? resolve(options.projectRoot) : dirname(candidatePackageJson);
+  const srcDir = resolve(projectRoot, options.srcDir ?? '.');
+  const artifactDir = resolve(options.artifactDir ?? join(projectRoot, CONFIG_DIR));
+
+  const name = agentName ?? 'default';
+  const buildDir = join(artifactDir, name);
+  const stagingDir = join(buildDir, 'staging');
+  const artifactsDir = artifactDir;
+
+  return {
+    projectRoot,
+    srcDir,
+    pyprojectPath: candidatePackageJson,
+    artifactDir,
+    buildDir,
+    stagingDir,
+    artifactsDir,
+  };
+}
+
 export function ensureDirCleanSync(dir: string): void {
   rmSync(dir, { recursive: true, force: true });
   mkdirSync(dir, { recursive: true });

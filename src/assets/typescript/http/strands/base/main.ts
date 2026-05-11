@@ -135,7 +135,7 @@ function getOrCreateAgent(): Agent {
 
 const app = new BedrockAgentCoreApp({
   invocationHandler: {
-    async *process(payload: { prompt?: string }, context: { sessionId?: string; userId?: string }) {
+    async *process(payload: any, context: any) {
       const agent = getOrCreateAgent();
 
       for await (const event of agent.stream(payload.prompt ?? '')) {

@@ -165,7 +165,7 @@ export type RuntimeVersion = z.infer<typeof RuntimeVersionSchema>;
 /** Default entrypoint filename for each target language (create path). */
 export const DEFAULT_ENTRYPOINT_BY_LANGUAGE: Record<'Python' | 'TypeScript', string> = {
   Python: 'main.py',
-  TypeScript: 'main.ts',
+  TypeScript: 'main.js',
 };
 
 /** Default runtime version for each target language (create path). */
