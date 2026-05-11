@@ -117,20 +117,6 @@ export class NodeCodeZipPackager implements RuntimePackager {
     writeFileSync(join(stagingDir, 'package.json'), '{"type":"commonjs"}');
     copyDynamicDeps(srcDir, stagingDir);
 
-    const otelRegister = join(srcDir, 'otel-register.ts');
-    if (existsSync(otelRegister)) {
-      await build({
-        entryPoints: [otelRegister],
-        outfile: join(stagingDir, 'otel-register.js'),
-        bundle: true,
-        platform: 'node',
-        format: 'cjs',
-        target: nodeTarget,
-        banner: { js: cjsBanner },
-        define: { 'import.meta.url': 'importMetaUrl' },
-      });
-    }
-
     const artifactPath = options.outputPath ?? join(artifactsDir, getArtifactZipName(agentName));
     await createZipFromDir(stagingDir, artifactPath);
     const sizeBytes = await enforceZipSizeLimit(artifactPath);
@@ -183,20 +169,6 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
 
     writeFileSync(join(stagingDir, 'package.json'), '{"type":"commonjs"}');
     copyDynamicDeps(srcDir, stagingDir);
-
-    const otelRegister = join(srcDir, 'otel-register.ts');
-    if (existsSync(otelRegister)) {
-      buildSync({
-        entryPoints: [otelRegister],
-        outfile: join(stagingDir, 'otel-register.js'),
-        bundle: true,
-        platform: 'node',
-        format: 'cjs',
-        target: nodeTarget,
-        banner: { js: cjsBanner },
-        define: { 'import.meta.url': 'importMetaUrl' },
-      });
-    }
 
     const artifactPath = options.outputPath ?? join(artifactsDir, getArtifactZipName(agentName));
     createZipFromDirSync(stagingDir, artifactPath);

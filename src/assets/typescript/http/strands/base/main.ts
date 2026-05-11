@@ -1,3 +1,4 @@
+import './otel-register.js';
 import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { Agent, tool } from '@strands-agents/sdk';
 import { loadModel } from './model/load.js';
