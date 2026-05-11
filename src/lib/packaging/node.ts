@@ -1,23 +1,20 @@
 import type { AgentEnvSpec, NodeRuntime, RuntimeVersion } from '../../schema';
-import { NPM_INSTALL_HINT, getArtifactZipName } from '../constants';
-import { runSubprocessCapture, runSubprocessCaptureSync } from '../utils/subprocess';
+import { getArtifactZipName } from '../constants';
 import { PackagingError } from './errors';
 import {
-  copySourceTree,
-  copySourceTreeSync,
   createZipFromDir,
   createZipFromDirSync,
   enforceZipSizeLimit,
   enforceZipSizeLimitSync,
-  ensureBinaryAvailable,
-  ensureBinaryAvailableSync,
   ensureDirClean,
   ensureDirCleanSync,
   isNodeRuntime,
-  resolveProjectPaths,
-  resolveProjectPathsSync,
+  resolveNodeProjectPaths,
+  resolveNodeProjectPathsSync,
 } from './helpers';
 import type { ArtifactResult, CodeZipPackager, PackageOptions, RuntimePackager } from './types/packaging';
+import { build, buildSync } from 'esbuild';
+import { existsSync } from 'fs';
 import { join } from 'path';
 
 const NODE_RUNTIME_REGEX = /NODE_(\d+)/;
@@ -47,6 +44,7 @@ export function extractNodeVersion(runtime: NodeRuntime): string {
 
 /**
  * Async Node/TypeScript packager for CLI usage.
+ * Bundles TypeScript source into a single JS file using esbuild.
  */
 export class NodeCodeZipPackager implements RuntimePackager {
   async pack(spec: AgentEnvSpec, options: PackageOptions = {}): Promise<ArtifactResult> {
@@ -59,16 +57,38 @@ export class NodeCodeZipPackager implements RuntimePackager {
     }
 
     const agentName = options.agentName ?? spec.name;
-    const { projectRoot, srcDir, stagingDir, artifactsDir } = await resolveProjectPaths(options, agentName);
+    const { srcDir, stagingDir, artifactsDir } = await resolveNodeProjectPaths(options, agentName);
 
-    await ensureBinaryAvailable('npm', NPM_INSTALL_HINT);
     await ensureDirClean(stagingDir);
 
-    // Copy source files
-    await copySourceTree(srcDir, stagingDir);
+    const entryFile = join(srcDir, 'main.ts');
+    const runtimeVersion = spec.runtimeVersion;
+    const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
+    const cjsBanner = `var __import_meta_url = require("url").pathToFileURL(__filename).href;
+if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", { value: __import_meta_url });`;
+    await build({
+      entryPoints: [entryFile],
+      outfile: join(stagingDir, 'main.js'),
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      minify: true,
+      target: nodeTarget,
+      banner: { js: cjsBanner },
+      define: { 'import.meta.url': '__import_meta_url' },
+    });
 
-    // Install production dependencies
-    await this.installDependencies(projectRoot, stagingDir);
+    const otelRegister = join(srcDir, 'otel-register.ts');
+    if (existsSync(otelRegister)) {
+      await build({
+        entryPoints: [otelRegister],
+        outfile: join(stagingDir, 'otel-register.js'),
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        target: nodeTarget,
+      });
+    }
 
     const artifactPath = options.outputPath ?? join(artifactsDir, getArtifactZipName(agentName));
     await createZipFromDir(stagingDir, artifactPath);
@@ -80,22 +100,11 @@ export class NodeCodeZipPackager implements RuntimePackager {
       stagingPath: stagingDir,
     };
   }
-
-  private async installDependencies(projectRoot: string, stagingDir: string): Promise<void> {
-    // Copy package.json to staging
-    const result = await runSubprocessCapture('npm', ['install', '--omit=dev', '--prefix', stagingDir], {
-      cwd: projectRoot,
-    });
-
-    if (result.code !== 0) {
-      const combined = `${result.stdout}\n${result.stderr}`.trim();
-      throw new PackagingError(combined.length > 0 ? combined : `npm install failed with exit code ${result.code}`);
-    }
-  }
 }
 
 /**
  * Sync Node/TypeScript packager for CDK bundling.
+ * Bundles TypeScript source into a single JS file using esbuild.
  */
 export class NodeCodeZipPackagerSync implements CodeZipPackager {
   packCodeZip(config: AgentEnvSpec, options: PackageOptions = {}): ArtifactResult {
@@ -106,16 +115,37 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
     }
 
     const agentName = options.agentName ?? config.name ?? 'asset';
-    const { projectRoot, srcDir, stagingDir, artifactsDir } = resolveProjectPathsSync(options, agentName);
+    const { srcDir, stagingDir, artifactsDir } = resolveNodeProjectPathsSync(options, agentName);
 
-    ensureBinaryAvailableSync('npm', NPM_INSTALL_HINT);
     ensureDirCleanSync(stagingDir);
 
-    // Copy source files
-    copySourceTreeSync(srcDir, stagingDir);
+    const entryFile = join(srcDir, 'main.ts');
+    const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
+    const cjsBanner = `var __import_meta_url = require("url").pathToFileURL(__filename).href;
+if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", { value: __import_meta_url });`;
+    buildSync({
+      entryPoints: [entryFile],
+      outfile: join(stagingDir, 'main.js'),
+      bundle: true,
+      platform: 'node',
+      format: 'cjs',
+      minify: true,
+      target: nodeTarget,
+      banner: { js: cjsBanner },
+      define: { 'import.meta.url': '__import_meta_url' },
+    });
 
-    // Install production dependencies
-    this.installDependenciesSync(projectRoot, stagingDir);
+    const otelRegister = join(srcDir, 'otel-register.ts');
+    if (existsSync(otelRegister)) {
+      buildSync({
+        entryPoints: [otelRegister],
+        outfile: join(stagingDir, 'otel-register.js'),
+        bundle: true,
+        platform: 'node',
+        format: 'cjs',
+        target: nodeTarget,
+      });
+    }
 
     const artifactPath = options.outputPath ?? join(artifactsDir, getArtifactZipName(agentName));
     createZipFromDirSync(stagingDir, artifactPath);
@@ -126,16 +156,5 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
       sizeBytes,
       stagingPath: stagingDir,
     };
-  }
-
-  private installDependenciesSync(projectRoot: string, stagingDir: string): void {
-    const result = runSubprocessCaptureSync('npm', ['install', '--omit=dev', '--prefix', stagingDir], {
-      cwd: projectRoot,
-    });
-
-    if (result.code !== 0) {
-      const combined = `${result.stdout}\n${result.stderr}`.trim();
-      throw new PackagingError(combined.length > 0 ? combined : `npm install failed with exit code ${result.code}`);
-    }
   }
 }

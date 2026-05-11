@@ -157,7 +157,6 @@ export function mapGenerateConfigToAgent(config: GenerateConfig): AgentEnvSpec {
     ...(config.sessionStorageMountPath && {
       filesystemConfigurations: [{ sessionStorage: { mountPath: config.sessionStorageMountPath } }],
     }),
-    // MCP uses mcp.run() which is incompatible with the opentelemetry-instrument wrapper
     ...(protocol === 'MCP' && { instrumentation: { enableOtel: false } }),
   };
 }
