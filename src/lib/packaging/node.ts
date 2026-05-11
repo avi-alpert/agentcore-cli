@@ -14,7 +14,7 @@ import {
 } from './helpers';
 import type { ArtifactResult, CodeZipPackager, PackageOptions, RuntimePackager } from './types/packaging';
 import { build, buildSync } from 'esbuild';
-import { existsSync } from 'fs';
+import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 const NODE_RUNTIME_REGEX = /NODE_(\d+)/;
@@ -64,17 +64,20 @@ export class NodeCodeZipPackager implements RuntimePackager {
     const entryFile = join(srcDir, 'main.ts');
     const runtimeVersion = spec.runtimeVersion;
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
-    const esmBanner = `import { createRequire } from "module"; const require = createRequire(import.meta.url);`;
+    const cjsBanner = 'const importMetaUrl = require("url").pathToFileURL(__filename).href;';
     await build({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
       bundle: true,
       platform: 'node',
-      format: 'esm',
+      format: 'cjs',
       minify: true,
       target: nodeTarget,
-      banner: { js: esmBanner },
+      banner: { js: cjsBanner },
+      define: { 'import.meta.url': 'importMetaUrl' },
     });
+
+    writeFileSync(join(stagingDir, 'package.json'), '{"type":"commonjs"}');
 
     const otelRegister = join(srcDir, 'otel-register.ts');
     if (existsSync(otelRegister)) {
@@ -83,9 +86,10 @@ export class NodeCodeZipPackager implements RuntimePackager {
         outfile: join(stagingDir, 'otel-register.js'),
         bundle: true,
         platform: 'node',
-        format: 'esm',
+        format: 'cjs',
         target: nodeTarget,
-        banner: { js: esmBanner },
+        banner: { js: cjsBanner },
+        define: { 'import.meta.url': 'importMetaUrl' },
       });
     }
 
@@ -120,17 +124,20 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
 
     const entryFile = join(srcDir, 'main.ts');
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
-    const esmBanner = `import { createRequire } from "module"; const require = createRequire(import.meta.url);`;
+    const cjsBanner = 'const importMetaUrl = require("url").pathToFileURL(__filename).href;';
     buildSync({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
       bundle: true,
       platform: 'node',
-      format: 'esm',
+      format: 'cjs',
       minify: true,
       target: nodeTarget,
-      banner: { js: esmBanner },
+      banner: { js: cjsBanner },
+      define: { 'import.meta.url': 'importMetaUrl' },
     });
+
+    writeFileSync(join(stagingDir, 'package.json'), '{"type":"commonjs"}');
 
     const otelRegister = join(srcDir, 'otel-register.ts');
     if (existsSync(otelRegister)) {
@@ -139,9 +146,10 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
         outfile: join(stagingDir, 'otel-register.js'),
         bundle: true,
         platform: 'node',
-        format: 'esm',
+        format: 'cjs',
         target: nodeTarget,
-        banner: { js: esmBanner },
+        banner: { js: cjsBanner },
+        define: { 'import.meta.url': 'importMetaUrl' },
       });
     }
 
