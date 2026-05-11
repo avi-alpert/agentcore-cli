@@ -64,18 +64,14 @@ export class NodeCodeZipPackager implements RuntimePackager {
     const entryFile = join(srcDir, 'main.ts');
     const runtimeVersion = spec.runtimeVersion;
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
-    const cjsBanner = `var __import_meta_url = require("url").pathToFileURL(__filename).href;
-if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", { value: __import_meta_url });`;
     await build({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
       bundle: true,
       platform: 'node',
-      format: 'cjs',
+      format: 'esm',
       minify: true,
       target: nodeTarget,
-      banner: { js: cjsBanner },
-      define: { 'import.meta.url': '__import_meta_url' },
     });
 
     const otelRegister = join(srcDir, 'otel-register.ts');
@@ -85,7 +81,7 @@ if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", {
         outfile: join(stagingDir, 'otel-register.js'),
         bundle: true,
         platform: 'node',
-        format: 'cjs',
+        format: 'esm',
         target: nodeTarget,
       });
     }
@@ -121,18 +117,14 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
 
     const entryFile = join(srcDir, 'main.ts');
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
-    const cjsBanner = `var __import_meta_url = require("url").pathToFileURL(__filename).href;
-if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", { value: __import_meta_url });`;
     buildSync({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
       bundle: true,
       platform: 'node',
-      format: 'cjs',
+      format: 'esm',
       minify: true,
       target: nodeTarget,
-      banner: { js: cjsBanner },
-      define: { 'import.meta.url': '__import_meta_url' },
     });
 
     const otelRegister = join(srcDir, 'otel-register.ts');
@@ -142,7 +134,7 @@ if (typeof import.meta === "object") Object.defineProperty(import.meta, "url", {
         outfile: join(stagingDir, 'otel-register.js'),
         bundle: true,
         platform: 'node',
-        format: 'cjs',
+        format: 'esm',
         target: nodeTarget,
       });
     }
