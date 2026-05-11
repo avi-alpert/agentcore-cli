@@ -64,6 +64,7 @@ export class NodeCodeZipPackager implements RuntimePackager {
     const entryFile = join(srcDir, 'main.ts');
     const runtimeVersion = spec.runtimeVersion;
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
+    const esmBanner = `import { createRequire } from "module"; const require = createRequire(import.meta.url);`;
     await build({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
@@ -72,6 +73,7 @@ export class NodeCodeZipPackager implements RuntimePackager {
       format: 'esm',
       minify: true,
       target: nodeTarget,
+      banner: { js: esmBanner },
     });
 
     const otelRegister = join(srcDir, 'otel-register.ts');
@@ -83,6 +85,7 @@ export class NodeCodeZipPackager implements RuntimePackager {
         platform: 'node',
         format: 'esm',
         target: nodeTarget,
+        banner: { js: esmBanner },
       });
     }
 
@@ -117,6 +120,7 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
 
     const entryFile = join(srcDir, 'main.ts');
     const nodeTarget = `node${extractNodeVersion(runtimeVersion)}`;
+    const esmBanner = `import { createRequire } from "module"; const require = createRequire(import.meta.url);`;
     buildSync({
       entryPoints: [entryFile],
       outfile: join(stagingDir, 'main.js'),
@@ -125,6 +129,7 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
       format: 'esm',
       minify: true,
       target: nodeTarget,
+      banner: { js: esmBanner },
     });
 
     const otelRegister = join(srcDir, 'otel-register.ts');
@@ -136,6 +141,7 @@ export class NodeCodeZipPackagerSync implements CodeZipPackager {
         platform: 'node',
         format: 'esm',
         target: nodeTarget,
+        banner: { js: esmBanner },
       });
     }
 
