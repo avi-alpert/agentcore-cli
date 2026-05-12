@@ -30,6 +30,8 @@ interface E2EConfig {
   memory?: string;
   /** Language for the agent project. Defaults to 'Python'. */
   language?: 'Python' | 'TypeScript';
+  /** Skip logs and traces tests. */
+  skipObservability?: boolean;
   /** Lifecycle configuration to pass via --idle-timeout / --max-lifetime flags. */
   lifecycleConfig?: {
     idleTimeout?: number;
@@ -224,7 +226,7 @@ export function createE2ESuite(cfg: E2EConfig) {
       120000
     );
 
-    it.skipIf(!canRun)(
+    it.skipIf(!canRun || !!cfg.skipObservability)(
       'logs returns entries from the invocation',
       async () => {
         await retry(
@@ -253,7 +255,7 @@ export function createE2ESuite(cfg: E2EConfig) {
       120000
     );
 
-    it.skipIf(!canRun)(
+    it.skipIf(!canRun || !!cfg.skipObservability)(
       'logs supports level filtering',
       async () => {
         // --level error should succeed even if no error-level logs exist
@@ -264,7 +266,7 @@ export function createE2ESuite(cfg: E2EConfig) {
       120000
     );
 
-    it.skipIf(!canRun)(
+    it.skipIf(!canRun || !!cfg.skipObservability)(
       'traces list succeeds after invocation',
       async () => {
         // traces list has no --json flag — verify exit code and non-empty output

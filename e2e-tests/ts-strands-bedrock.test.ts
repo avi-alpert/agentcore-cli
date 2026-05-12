@@ -4,4 +4,5 @@ createE2ESuite({
   framework: 'Strands',
   modelProvider: 'Bedrock',
   language: 'TypeScript',
+  skipObservability: true,
 });

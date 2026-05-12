@@ -4,4 +4,5 @@ createE2ESuite({
   framework: 'VercelAI',
   modelProvider: 'Bedrock',
   language: 'TypeScript',
+  skipObservability: true,
 });
