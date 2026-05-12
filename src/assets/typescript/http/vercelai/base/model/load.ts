@@ -29,18 +29,27 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or ANTHROPIC_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-const anthropic = createAnthropic({ apiKey: getApiKey });
+let _anthropic: ReturnType<typeof createAnthropic> | undefined;
 
-export function loadModel() {
+async function getProvider() {
+  if (!_anthropic) {
+    const apiKey = await getApiKey();
+    _anthropic = createAnthropic({ apiKey });
+  }
+  return _anthropic;
+}
+
+export async function loadModel() {
+  const anthropic = await getProvider();
   return anthropic('claude-sonnet-4-5-20250929');
 }
 {{/if}}
@@ -53,18 +62,27 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or OPENAI_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-const openai = createOpenAI({ apiKey: getApiKey });
+let _openai: ReturnType<typeof createOpenAI> | undefined;
 
-export function loadModel() {
+async function getProvider() {
+  if (!_openai) {
+    const apiKey = await getApiKey();
+    _openai = createOpenAI({ apiKey });
+  }
+  return _openai;
+}
+
+export async function loadModel() {
+  const openai = await getProvider();
   return openai('gpt-4.1');
 }
 {{/if}}
@@ -77,18 +95,27 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or GEMINI_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-const google = createGoogleGenerativeAI({ apiKey: getApiKey });
+let _google: ReturnType<typeof createGoogleGenerativeAI> | undefined;
 
-export function loadModel() {
+async function getProvider() {
+  if (!_google) {
+    const apiKey = await getApiKey();
+    _google = createGoogleGenerativeAI({ apiKey });
+  }
+  return _google;
+}
+
+export async function loadModel() {
+  const google = await getProvider();
   return google('gemini-2.5-flash');
 }
 {{/if}}

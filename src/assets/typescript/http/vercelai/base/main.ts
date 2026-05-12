@@ -8,8 +8,9 @@ const SYSTEM_PROMPT = `You are a helpful assistant.`;
 const app = new BedrockAgentCoreApp({
   invocationHandler: {
     async *process(payload: any, context: any) {
+      const model = await loadModel();
       const result = streamText({
-        model: loadModel(),
+        model,
         system: SYSTEM_PROMPT,
         prompt: payload.prompt ?? '',
       });

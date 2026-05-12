@@ -14,21 +14,27 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.ANTHROPIC_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or ANTHROPIC_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-export function loadModel(): AnthropicModel {
-  return new AnthropicModel({
-    clientArgs: { apiKey: getApiKey },
-    modelId: 'claude-sonnet-4-5-20250929',
-    maxTokens: 5000,
-  });
+let _model: AnthropicModel | undefined;
+
+export async function loadModel(): Promise<AnthropicModel> {
+  if (!_model) {
+    const apiKey = await getApiKey();
+    _model = new AnthropicModel({
+      apiKey,
+      modelId: 'claude-sonnet-4-5-20250929',
+      maxTokens: 5000,
+    });
+  }
+  return _model;
 }
 {{/if}}
 {{#if (eq modelProvider "OpenAI")}}
@@ -40,20 +46,27 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.OPENAI_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or OPENAI_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-export function loadModel(): OpenAIModel {
-  return new OpenAIModel({
-    clientArgs: { apiKey: getApiKey },
-    modelId: 'gpt-4.1',
-  });
+let _model: OpenAIModel | undefined;
+
+export async function loadModel(): Promise<OpenAIModel> {
+  if (!_model) {
+    const apiKey = await getApiKey();
+    _model = new OpenAIModel({
+      api: 'chat',
+      apiKey,
+      modelId: 'gpt-4.1',
+    });
+  }
+  return _model;
 }
 {{/if}}
 {{#if (eq modelProvider "Gemini")}}
@@ -65,19 +78,25 @@ const IDENTITY_ENV_VAR = '{{identityProviders.[0].envVarName}}';
 
 async function getApiKey(): Promise<string> {
   if (process.env.LOCAL_DEV === '1') {
-    const apiKey = process.env[IDENTITY_ENV_VAR];
+    const apiKey = process.env[IDENTITY_ENV_VAR] ?? process.env.GEMINI_API_KEY;
     if (!apiKey) {
-      throw new Error(`${IDENTITY_ENV_VAR} not found. Add ${IDENTITY_ENV_VAR}=your-key to .env.local`);
+      throw new Error(`${IDENTITY_ENV_VAR} or GEMINI_API_KEY not found. Add your key to agentcore/.env.local`);
     }
     return apiKey;
   }
   return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
 }
 
-export function loadModel(): GoogleModel {
-  return new GoogleModel({
-    clientArgs: { apiKey: getApiKey },
-    modelId: 'gemini-2.5-flash',
-  });
+let _model: GoogleModel | undefined;
+
+export async function loadModel(): Promise<GoogleModel> {
+  if (!_model) {
+    const apiKey = await getApiKey();
+    _model = new GoogleModel({
+      apiKey,
+      modelId: 'gemini-2.5-flash',
+    });
+  }
+  return _model;
 }
 {{/if}}

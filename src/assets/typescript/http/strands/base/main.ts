@@ -123,10 +123,11 @@ You have persistent storage at {{sessionStorageMountPath}}. Use file tools to re
 
 let cachedAgent: Agent | null = null;
 
-function getOrCreateAgent(): Agent {
+async function getOrCreateAgent(): Promise<Agent> {
   if (!cachedAgent) {
+    const model = await loadModel();
     cachedAgent = new Agent({
-      model: loadModel(),
+      model,
       systemPrompt: SYSTEM_PROMPT,
       tools,
     });
@@ -137,7 +138,7 @@ function getOrCreateAgent(): Agent {
 const app = new BedrockAgentCoreApp({
   invocationHandler: {
     async *process(payload: any, context: any) {
-      const agent = getOrCreateAgent();
+      const agent = await getOrCreateAgent();
 
       for await (const event of agent.stream(payload.prompt ?? '')) {
         if (
