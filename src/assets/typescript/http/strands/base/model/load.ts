@@ -20,7 +20,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _model: AnthropicModel | undefined;
@@ -52,7 +52,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _model: OpenAIModel | undefined;
@@ -84,7 +84,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _model: GoogleModel | undefined;

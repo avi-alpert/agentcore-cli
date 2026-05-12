@@ -35,7 +35,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _anthropic: ReturnType<typeof createAnthropic> | undefined;
@@ -68,7 +68,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _openai: ReturnType<typeof createOpenAI> | undefined;
@@ -101,7 +101,7 @@ async function getApiKey(): Promise<string> {
     }
     return apiKey;
   }
-  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME }, async (apiKey: string) => apiKey)();
+  return withApiKey({ providerName: IDENTITY_PROVIDER_NAME })(async (apiKey: string) => apiKey)();
 }
 
 let _google: ReturnType<typeof createGoogleGenerativeAI> | undefined;
