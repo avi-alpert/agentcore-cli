@@ -94,20 +94,16 @@ async function doStartAgent(
   // Several frameworks bind to a fixed port that ignores the PORT env var:
   //  - A2A: serve_a2a() accepts port as a function parameter, not from env → 9000
   //  - MCP (FastMCP): pydantic BaseSettings init kwarg overrides env → 8000
-  //  - TS HTTP (BedrockAgentCoreApp): published SDK hardcodes port 8080 in run()
+  // TS HTTP agents read PORT env var so we can assign any available port.
   // For Python HTTP agents, uvicorn takes --port as a CLI arg so we can assign any port.
   const isA2A = config.protocol === 'A2A';
   const isMCP = config.protocol === 'MCP';
+  const fixedPort = isA2A ? 9000 : isMCP ? 8000 : undefined;
   const isTsHttp = !config.isPython && config.protocol === 'HTTP';
-  const fixedPort = isA2A ? 9000 : isMCP ? 8000 : isTsHttp ? 8080 : undefined;
-  const targetPort = fixedPort ?? ctx.options.uiPort + 1 + (agentIndex >= 0 ? agentIndex : 0);
+  const targetPort = fixedPort ?? (isTsHttp ? 8080 : ctx.options.uiPort + 1 + (agentIndex >= 0 ? agentIndex : 0));
   const agentPort = await findAvailablePort(targetPort);
   if (fixedPort && agentPort !== fixedPort) {
-    const reason = isA2A
-      ? 'A2A agents require port 9000.'
-      : isMCP
-        ? 'MCP agents require port 8000 (FastMCP default).'
-        : 'TypeScript HTTP agents require port 8080 (BedrockAgentCoreApp default).';
+    const reason = isA2A ? 'A2A agents require port 9000.' : 'MCP agents require port 8000 (FastMCP default).';
     return {
       success: false,
       name: agentName,
@@ -149,7 +145,11 @@ async function doStartAgent(
   };
 
   const baseEnvVars = ctx.options.getEnvVars ? await ctx.options.getEnvVars() : (ctx.options.envVars ?? {});
-  const agentEnvVars = { ...baseEnvVars, OTEL_SERVICE_NAME: agentName };
+  const agentEnvVars = {
+    ...baseEnvVars,
+    OTEL_SERVICE_NAME: agentName,
+    ...(isTsHttp ? { PORT: String(agentPort) } : {}),
+  };
 
   const agentServer = createDevServer(config, {
     port: agentPort,
