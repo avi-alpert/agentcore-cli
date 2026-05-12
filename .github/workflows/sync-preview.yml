@@ -52,6 +52,14 @@ jobs:
             echo "status=conflict" >> $GITHUB_OUTPUT
           fi
 
+      - name: Generate GitHub App Token
+        if: steps.merge.outputs.status == 'conflict'
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Get original commit author
         if: steps.merge.outputs.status == 'conflict'
         id: author
@@ -65,12 +73,12 @@ jobs:
           echo "name=$AUTHOR" >> $GITHUB_OUTPUT
           echo "gh_user=$GH_USER" >> $GITHUB_OUTPUT
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
 
       - name: Create PR for conflict resolution
         if: steps.merge.outputs.status == 'conflict'
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
           AUTHOR_NAME: ${{ steps.author.outputs.name }}
           AUTHOR_GH: ${{ steps.author.outputs.gh_user }}
         run: |
