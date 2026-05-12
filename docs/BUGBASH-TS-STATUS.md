@@ -23,8 +23,8 @@ npm install -g ./aws-agentcore-0.13.1-<timestamp>.tgz
 | Strands   | CodeZip   | Anthropic | ✅     | ✅         | —            | ✅     | ❌ (credential not configured on service) |
 | Strands   | CodeZip   | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
 | Strands   | CodeZip   | Gemini    | ✅     | ✅         | —            | —      | —                                         |
-| Strands   | Container | Bedrock   | ✅     | ✅         | ✅           | —      | —                                         |
-| Strands   | Container | Anthropic | ✅     | ✅         | ✅           | —      | —                                         |
+| Strands   | Container | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                        |
+| Strands   | Container | Anthropic | ✅     | ✅         | ✅           | ✅     | ❌ (credential not configured on service) |
 | Strands   | Container | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
 | Strands   | Container | Gemini    | ✅     | ✅         | —            | —      | —                                         |
 | VercelAI  | CodeZip   | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                        |
@@ -43,8 +43,10 @@ Legend: ✅ = tested & passed, ❌ = tested & failed, — = not tested
 - ~~**All Container + non-Bedrock combos** (4 Strands + 4 VercelAI = 8 rows)~~ ✅ All pass (Create, Dev logs, Invoke)
 - ~~**Web UI mode** for non-Bedrock providers~~ ✅ Verified for Strands+Container+Anthropic and
   VercelAI+Container+Anthropic (returns 200)
-- **Deploy + invoke** for non-Bedrock providers once Identity service credential is configured
-- **Remove + destroy** lifecycle for non-Bedrock deployed stacks
+- **Deploy + invoke** for non-Bedrock providers — Deploy works (✅), but invoke fails with credential resolution error
+  (same as CodeZip Known Issue #1). Identity service credential is created but agent runtime cannot retrieve it.
+- ~~**Remove + destroy** lifecycle for non-Bedrock deployed stacks~~ ✅ Verified: `agentcore remove all --yes` +
+  `agentcore deploy --yes` cleans up all AWS resources
 
 ## Known Issues & Gaps
 
