@@ -17,24 +17,24 @@ npm install -g ./aws-agentcore-0.13.1-<timestamp>.tgz
 
 ## Test Matrix Results
 
-| Framework | Build     | Provider  | Create | Dev (logs) | Dev (web UI) | Deploy | Invoke (deployed)                         |
-| --------- | --------- | --------- | ------ | ---------- | ------------ | ------ | ----------------------------------------- |
-| Strands   | CodeZip   | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                        |
-| Strands   | CodeZip   | Anthropic | ✅     | ✅         | —            | ✅     | ❌ (credential not configured on service) |
-| Strands   | CodeZip   | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
-| Strands   | CodeZip   | Gemini    | ✅     | ✅         | —            | —      | —                                         |
-| Strands   | Container | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                        |
-| Strands   | Container | Anthropic | ✅     | ✅         | ✅           | ✅     | ❌ (credential not configured on service) |
-| Strands   | Container | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
-| Strands   | Container | Gemini    | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | CodeZip   | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                        |
-| VercelAI  | CodeZip   | Anthropic | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | CodeZip   | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | CodeZip   | Gemini    | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | Container | Bedrock   | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | Container | Anthropic | ✅     | ✅         | ✅           | —      | —                                         |
-| VercelAI  | Container | OpenAI    | ✅     | ✅         | —            | —      | —                                         |
-| VercelAI  | Container | Gemini    | ✅     | ✅         | —            | —      | —                                         |
+| Framework | Build     | Provider  | Create | Dev (logs) | Dev (web UI) | Deploy | Invoke (deployed)                       |
+| --------- | --------- | --------- | ------ | ---------- | ------------ | ------ | --------------------------------------- |
+| Strands   | CodeZip   | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                      |
+| Strands   | CodeZip   | Anthropic | ✅     | ✅         | —            | ✅     | ❌ → ✅ (fixed: withApiKey call syntax) |
+| Strands   | CodeZip   | OpenAI    | ✅     | ✅         | —            | —      | —                                       |
+| Strands   | CodeZip   | Gemini    | ✅     | ✅         | —            | —      | —                                       |
+| Strands   | Container | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                      |
+| Strands   | Container | Anthropic | ✅     | ✅         | ✅           | ✅     | ✅ (after withApiKey fix)               |
+| Strands   | Container | OpenAI    | ✅     | ✅         | —            | —      | —                                       |
+| Strands   | Container | Gemini    | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | CodeZip   | Bedrock   | ✅     | ✅         | ✅           | ✅     | ✅                                      |
+| VercelAI  | CodeZip   | Anthropic | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | CodeZip   | OpenAI    | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | CodeZip   | Gemini    | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | Container | Bedrock   | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | Container | Anthropic | ✅     | ✅         | ✅           | —      | —                                       |
+| VercelAI  | Container | OpenAI    | ✅     | ✅         | —            | —      | —                                       |
+| VercelAI  | Container | Gemini    | ✅     | ✅         | —            | —      | —                                       |
 
 Legend: ✅ = tested & passed, ❌ = tested & failed, — = not tested
 
@@ -43,17 +43,20 @@ Legend: ✅ = tested & passed, ❌ = tested & failed, — = not tested
 - ~~**All Container + non-Bedrock combos** (4 Strands + 4 VercelAI = 8 rows)~~ ✅ All pass (Create, Dev logs, Invoke)
 - ~~**Web UI mode** for non-Bedrock providers~~ ✅ Verified for Strands+Container+Anthropic and
   VercelAI+Container+Anthropic (returns 200)
-- **Deploy + invoke** for non-Bedrock providers — Deploy works (✅), but invoke fails with credential resolution error
-  (same as CodeZip Known Issue #1). Identity service credential is created but agent runtime cannot retrieve it.
+- ~~**Deploy + invoke** for non-Bedrock providers~~ ✅ Fixed! Root cause was incorrect `withApiKey` call syntax in
+  templates (commit `9c4715f9`). Deployed invoke now works for Strands+Container+Anthropic.
 - ~~**Remove + destroy** lifecycle for non-Bedrock deployed stacks~~ ✅ Verified: `agentcore remove all --yes` +
   `agentcore deploy --yes` cleans up all AWS resources
 
 ## Known Issues & Gaps
 
-### 1. Deployed invoke fails for non-Bedrock providers
+### 1. ~~Deployed invoke fails for non-Bedrock providers~~ FIXED
 
-The `withApiKey({ providerName })` call in deployed mode requires the AgentCore Identity service to have the credential
-stored. This is a service-side configuration step, not a CLI bug. To test deployed invoke for non-Bedrock:
+**Root cause:** Template bug — `withApiKey(config, fn)()` should be `withApiKey(config)(fn)()`. The SDK uses a curried
+HOF pattern. Fixed in commit `9c4715f9`.
+
+~~The `withApiKey({ providerName })` call in deployed mode requires the AgentCore Identity service to have the
+credential stored. This is a service-side configuration step, not a CLI bug.~~ To test deployed invoke for non-Bedrock:
 
 - Deploy with `agentcore deploy`
 - Manually register the API key credential via the AgentCore Identity API
