@@ -28,6 +28,8 @@ interface E2EConfig {
   requiredEnvVar?: string;
   build?: string;
   memory?: string;
+  /** Language for the agent project. Defaults to 'Python'. */
+  language?: 'Python' | 'TypeScript';
   /** Lifecycle configuration to pass via --idle-timeout / --max-lifetime flags. */
   lifecycleConfig?: {
     idleTimeout?: number;
@@ -37,7 +39,8 @@ interface E2EConfig {
 
 export function createE2ESuite(cfg: E2EConfig) {
   const hasApiKey = !cfg.requiredEnvVar || !!process.env[cfg.requiredEnvVar];
-  const canRun = baseCanRun && hasApiKey;
+  const needsUv = cfg.language !== 'TypeScript';
+  const canRun = prereqs.npm && prereqs.git && hasAws && hasApiKey && (!needsUv || prereqs.uv);
 
   describe.sequential(`e2e: ${cfg.framework}/${cfg.modelProvider} — create → deploy → invoke`, () => {
     let testDir: string;
@@ -58,7 +61,7 @@ export function createE2ESuite(cfg: E2EConfig) {
         '--name',
         agentName,
         '--language',
-        'Python',
+        cfg.language ?? 'Python',
         '--framework',
         cfg.framework,
         '--model-provider',
