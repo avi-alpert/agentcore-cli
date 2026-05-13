@@ -100,7 +100,7 @@ async function doStartAgent(
   const isMCP = config.protocol === 'MCP';
   const fixedPort = isA2A ? 9000 : isMCP ? 8000 : undefined;
   const isTsHttp = !config.isPython && config.protocol === 'HTTP';
-  const targetPort = fixedPort ?? (isTsHttp ? 8080 : ctx.options.uiPort + 1 + (agentIndex >= 0 ? agentIndex : 0));
+  const targetPort = fixedPort ?? ctx.options.uiPort + 1 + (agentIndex >= 0 ? agentIndex : 0);
   const agentPort = await findAvailablePort(targetPort);
   if (fixedPort && agentPort !== fixedPort) {
     const reason = isA2A ? 'A2A agents require port 9000.' : 'MCP agents require port 8000 (FastMCP default).';
