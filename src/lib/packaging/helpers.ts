@@ -277,6 +277,19 @@ export function resolveProjectPathsSync(options: PackageOptions = {}, agentName?
   };
 }
 
+/**
+ * Resolve filesystem paths for a Node.js/TypeScript agent project during packaging.
+ *
+ * Locates the nearest package.json (equivalent of pyproject.toml for Python agents),
+ * then derives:
+ * - projectRoot: directory containing package.json
+ * - srcDir: source directory (defaults to projectRoot)
+ * - artifactDir: where CDK config and build outputs live (agentcore/ directory)
+ * - buildDir/stagingDir: per-agent temp directories used during CodeZip packaging
+ *
+ * Note: `pyprojectPath` in the return type is reused from the Python ResolvedPaths
+ * interface — for Node projects it points to package.json.
+ */
 export async function resolveNodeProjectPaths(
   options: PackageOptions = {},
   agentName?: string
@@ -308,6 +321,7 @@ export async function resolveNodeProjectPaths(
   };
 }
 
+/** Synchronous version of resolveNodeProjectPaths — used in contexts where async is not available. */
 export function resolveNodeProjectPathsSync(options: PackageOptions = {}, agentName?: string): ResolvedPaths {
   const startDir = options.projectRoot ? resolve(options.projectRoot) : process.cwd();
   const candidatePackageJson = findUpSync('package.json', startDir);

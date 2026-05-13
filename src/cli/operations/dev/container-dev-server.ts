@@ -124,8 +124,19 @@ export class ContainerDevServer extends DevServer {
   }
 
   /**
-   * Resolve AWS credentials on the host so containers never need credential_process
-   * tools (e.g. ada) that aren't installed inside the image.
+   * Resolve AWS credentials on the host and return them as plain env vars.
+   *
+   * Why: Container Dockerfiles run as `USER bedrock_agentcore` (non-root, different
+   * uid from the host user). Mounted ~/.aws files have 600 permissions owned by the
+   * host uid, so the container user cannot read them. Additionally, credential_process
+   * tools like `ada` are not installed inside the image.
+   *
+   * By resolving credentials on the host (where ada/SSO/profiles work) and injecting
+   * the resulting AWS_ACCESS_KEY_ID/SECRET/TOKEN as container env vars, we avoid both
+   * problems. This applies to all container agents (Python and TypeScript).
+   *
+   * Security: acceptable for local dev — credentials are short-lived STS session
+   * tokens visible only on the developer's machine (same as `docker run -e`).
    */
   private resolveHostCredentials(): Record<string, string> | null {
     const profile = process.env.AWS_PROFILE ?? 'default';
