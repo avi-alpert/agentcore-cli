@@ -22,6 +22,7 @@ framework is restricted to `Strands` or `VercelAI`; other values are rejected. S
 | **LangChain_LangGraph** | Bedrock, Anthropic, OpenAI, Gemini |
 | **GoogleADK**           | Gemini only                        |
 | **OpenAIAgents**        | OpenAI only                        |
+| **VercelAI**            | Bedrock, Anthropic, OpenAI, Gemini |
 
 ## Framework Selection Guide
 
@@ -90,6 +91,27 @@ OpenAI's native agent framework.
 
 ```bash
 agentcore create --framework OpenAIAgents --model-provider OpenAI --api-key sk-...
+```
+
+### Vercel AI SDK
+
+Vercel's AI SDK for building AI-powered applications.
+
+**Best for:**
+
+- Full-stack AI applications with streaming support
+- Projects using Vercel's ecosystem
+- TypeScript-first agent development
+
+**Model providers:** Bedrock, Anthropic, OpenAI, Gemini
+
+**Languages:** Python, TypeScript
+
+```bash
+agentcore create --framework VercelAI --model-provider Bedrock
+
+# TypeScript variant
+agentcore create --framework VercelAI --model-provider Bedrock --language TypeScript
 ```
 
 ## Import from Bedrock Agents
@@ -167,19 +189,19 @@ agentcore add agent \
 
 ## Framework Comparison
 
-| Feature                | Strands | LangChain | GoogleADK | OpenAIAgents |
-| ---------------------- | ------- | --------- | --------- | ------------ |
-| Multi-provider support | Yes     | Yes       | No        | No           |
-| AWS Bedrock native     | Yes     | No        | No        | No           |
-| Tool ecosystem         | Growing | Extensive | Moderate  | Moderate     |
-| Memory integration     | Native  | Via libs  | Via libs  | Via libs     |
+| Feature                | Strands | LangChain | GoogleADK | OpenAIAgents | VercelAI |
+| ---------------------- | ------- | --------- | --------- | ------------ | -------- |
+| Multi-provider support | Yes     | Yes       | No        | No           | Yes      |
+| AWS Bedrock native     | Yes     | No        | No        | No           | No       |
+| Tool ecosystem         | Growing | Extensive | Moderate  | Moderate     | Moderate |
+| Memory integration     | Native  | Via libs  | Via libs  | Via libs     | Via libs |
 
 ## Protocol Compatibility
 
 Not all frameworks support all protocol modes. MCP protocol is a standalone tool server with no framework.
 
-| Protocol | Supported Frameworks                                  |
-| -------- | ----------------------------------------------------- |
-| **HTTP** | Strands, LangChain_LangGraph, GoogleADK, OpenAIAgents |
-| **MCP**  | None (standalone tool server)                         |
-| **A2A**  | Strands, GoogleADK, LangChain_LangGraph               |
+| Protocol | Supported Frameworks                                            |
+| -------- | --------------------------------------------------------------- |
+| **HTTP** | Strands, LangChain_LangGraph, GoogleADK, OpenAIAgents, VercelAI |
+| **MCP**  | None (standalone tool server)                                   |
+| **A2A**  | Strands, GoogleADK, LangChain_LangGraph                         |
