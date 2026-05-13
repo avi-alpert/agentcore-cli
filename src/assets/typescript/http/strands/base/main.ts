@@ -1,23 +1,10 @@
-import './otel-register.js';
 import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { Agent, tool } from '@strands-agents/sdk';
 import { loadModel } from './model/load.js';
-{{#if hasGateway}}
-import { getAllGatewayMcpClients } from './mcp_client/client.js';
-{{else}}
 import { getStreamableHttpMcpClient } from './mcp_client/client.js';
-{{/if}}
-{{#if sessionStorageMountPath}}
-import { promises as fs } from 'node:fs';
-import * as path from 'node:path';
-{{/if}}
 
 // Define a collection of MCP clients
-{{#if hasGateway}}
-const mcpClients = getAllGatewayMcpClients();
-{{else}}
 const mcpClients = [getStreamableHttpMcpClient()].filter(Boolean);
-{{/if}}
 
 // Define a collection of tools used by the model
 const tools: unknown[] = [];
@@ -38,75 +25,6 @@ const addNumbers = tool({
 });
 tools.push(addNumbers);
 
-{{#if sessionStorageMountPath}}
-const SESSION_STORAGE_PATH = '{{sessionStorageMountPath}}';
-
-function safeResolve(p: string): string {
-  const base = path.resolve(SESSION_STORAGE_PATH);
-  const resolved = path.resolve(base, p.replace(/^\/+/, ''));
-  if (!resolved.startsWith(base)) {
-    throw new Error(`Path '${p}' is outside the storage boundary`);
-  }
-  return resolved;
-}
-
-const fileRead = tool({
-  name: 'file_read',
-  description: 'Read a file from persistent storage. The path is relative to the storage root.',
-  inputSchema: {
-    type: 'object',
-    properties: { path: { type: 'string' } },
-    required: ['path'],
-  },
-  handler: async ({ path: p }: { path: string }) => {
-    try {
-      return await fs.readFile(safeResolve(p), 'utf-8');
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    }
-  },
-});
-
-const fileWrite = tool({
-  name: 'file_write',
-  description: 'Write content to a file in persistent storage. The path is relative to the storage root.',
-  inputSchema: {
-    type: 'object',
-    properties: { path: { type: 'string' }, content: { type: 'string' } },
-    required: ['path', 'content'],
-  },
-  handler: async ({ path: p, content }: { path: string; content: string }) => {
-    try {
-      const full = safeResolve(p);
-      await fs.mkdir(path.dirname(full), { recursive: true });
-      await fs.writeFile(full, content, 'utf-8');
-      return `Written to ${p}`;
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    }
-  },
-});
-
-const listFiles = tool({
-  name: 'list_files',
-  description: 'List files in persistent storage. The directory is relative to the storage root.',
-  inputSchema: {
-    type: 'object',
-    properties: { directory: { type: 'string' } },
-  },
-  handler: async ({ directory = '' }: { directory?: string }) => {
-    try {
-      const entries = await fs.readdir(safeResolve(directory));
-      return entries.length > 0 ? entries.join('\n') : '(empty directory)';
-    } catch (err) {
-      return err instanceof Error ? err.message : String(err);
-    }
-  },
-});
-
-tools.push(fileRead, fileWrite, listFiles);
-{{/if}}
-
 // Add MCP clients to tools if available
 for (const mcpClient of mcpClients) {
   if (mcpClient) {
@@ -116,9 +34,6 @@ for (const mcpClient of mcpClients) {
 
 const SYSTEM_PROMPT = `
 You are a helpful assistant. Use tools when appropriate.
-{{#if sessionStorageMountPath}}
-You have persistent storage at {{sessionStorageMountPath}}. Use file tools to read and write files. Data persists across sessions.
-{{/if}}
 `;
 
 let cachedAgent: Agent | null = null;

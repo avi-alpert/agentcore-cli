@@ -8,10 +8,10 @@ for existing code.
 | Language   | Supported Frameworks | Runtime      | Notes                                                                              |
 | ---------- | -------------------- | ------------ | ---------------------------------------------------------------------------------- |
 | Python     | All frameworks       | Python 3.12+ | Default language. Uses `uv` for dependency management.                             |
-| TypeScript | Strands only         | Node 22      | Uses `npm` + `tsx` for the dev loop. Other frameworks are not yet available in TS. |
+| TypeScript | Strands, Vercel AI   | Node 22      | Uses `npm` + `tsx` for the dev loop. Other frameworks are not yet available in TS. |
 
 Pass `--language TypeScript` to `agentcore create` or `agentcore add agent` to scaffold a TypeScript project. The
-framework is restricted to `Strands`; other values are rejected. See
+framework is restricted to `Strands` or `VercelAI`; other values are rejected. See
 [Local Development](local-development.md#typescript-agents) for the TS dev loop.
 
 ## Available Frameworks

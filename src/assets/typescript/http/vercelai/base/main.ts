@@ -1,4 +1,3 @@
-import './otel-register.js';
 import { BedrockAgentCoreApp } from 'bedrock-agentcore/runtime';
 import { streamText } from 'ai';
 import { loadModel } from './model/load.js';

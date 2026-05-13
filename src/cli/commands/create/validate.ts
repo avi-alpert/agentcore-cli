@@ -192,7 +192,7 @@ export function validateCreateOptions(options: CreateOptions, cwd?: string): Val
       return { valid: false, error: `Invalid model provider: ${options.modelProvider}` };
     }
 
-    // TypeScript is Strands-only for now
+    // TypeScript supports Strands and Vercel AI only
     if (options.language === 'TypeScript' && fwResult.data !== 'Strands' && fwResult.data !== 'VercelAI') {
       return {
         valid: false,

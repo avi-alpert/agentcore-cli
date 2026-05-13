@@ -51,7 +51,7 @@ agentcore create \
 # Skip agent creation
 agentcore create --name MyProject --no-agent
 
-# TypeScript (Strands-only)
+# TypeScript (Strands or Vercel AI)
 agentcore create \
   --name MyTsProject \
   --language TypeScript \
