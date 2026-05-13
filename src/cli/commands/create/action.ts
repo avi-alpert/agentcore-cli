@@ -149,6 +149,7 @@ export interface CreateWithAgentOptions {
   maxLifetime?: number;
   sessionStorageMountPath?: string;
   withConfigBundle?: boolean;
+  frontend?: 'none' | 'copilotkit';
   skipGit?: boolean;
   skipInstall?: boolean;
   skipPythonSetup?: boolean;
@@ -175,6 +176,7 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
     maxLifetime: maxLifetimeOpt,
     sessionStorageMountPath,
     withConfigBundle,
+    frontend,
     skipGit,
     skipInstall,
     skipPythonSetup,
@@ -251,14 +253,16 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
     onProgress?.('Add agent to project', 'start');
     const agentName = name;
     const isMcp = protocol === 'MCP';
-    const resolvedFramework = isMcp ? ('Strands' as SDKFramework) : (framework ?? ('Strands' as SDKFramework));
-    const resolvedModelProvider = isMcp
-      ? ('Bedrock' as ModelProvider)
-      : (modelProvider ?? ('Bedrock' as ModelProvider));
+    const resolvedFramework = isMcp ? ('Strands' as SDKFramework) : (framework ?? 'Strands');
+    const resolvedModelProvider = isMcp ? ('Bedrock' as ModelProvider) : (modelProvider ?? 'Bedrock');
+
+    if (frontend && frontend !== 'none' && protocol !== 'AGUI') {
+      throw new Error('--frontend is only supported with AGUI protocol agents');
+    }
 
     const generateConfig = {
       projectName: agentName,
-      buildType: buildType ?? ('CodeZip' as BuildType),
+      buildType: buildType ?? 'CodeZip',
       sdk: resolvedFramework,
       modelProvider: resolvedModelProvider,
       apiKey,
@@ -273,6 +277,7 @@ export async function createProjectWithAgent(options: CreateWithAgentOptions): P
       ...(maxLifetimeOpt !== undefined && { maxLifetime: maxLifetimeOpt }),
       ...(sessionStorageMountPath && { sessionStorageMountPath }),
       ...(withConfigBundle && { withConfigBundle }),
+      ...(frontend && frontend !== 'none' && { frontend }),
     };
 
     // Resolve credential strategy FIRST (new project has no existing credentials)

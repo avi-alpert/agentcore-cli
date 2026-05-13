@@ -285,5 +285,6 @@ export async function mapGenerateConfigToRenderConfig(
     sessionStorageMountPath: config.sessionStorageMountPath,
     enableOtel,
     hasConfigBundle: config.withConfigBundle,
+    hasFrontend: config.frontend === 'copilotkit',
   };
 }

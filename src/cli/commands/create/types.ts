@@ -21,6 +21,7 @@ export interface CreateOptions extends VpcOptions {
   maxLifetime?: number | string;
   sessionStorageMountPath?: string;
   withConfigBundle?: boolean;
+  frontend?: string;
   outputDir?: string;
   skipGit?: boolean;
   skipPythonSetup?: boolean;

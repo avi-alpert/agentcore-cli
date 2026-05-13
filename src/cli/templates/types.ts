@@ -74,4 +74,6 @@ export interface AgentRenderConfig {
   enableOtel?: boolean;
   /** Whether a config bundle is wired into the agent template */
   hasConfigBundle?: boolean;
+  /** Whether to scaffold a CopilotKit frontend (AGUI only) */
+  hasFrontend?: boolean;
 }

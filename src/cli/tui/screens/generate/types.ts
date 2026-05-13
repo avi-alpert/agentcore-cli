@@ -20,6 +20,7 @@ export type GenerateStep =
   | 'modelProvider'
   | 'apiKey'
   | 'memory'
+  | 'frontend'
   | 'advanced'
   | 'networkMode'
   | 'subnets'
@@ -33,6 +34,8 @@ export type GenerateStep =
   | 'confirm';
 
 export type MemoryOption = 'none' | 'shortTerm' | 'longAndShortTerm';
+
+export type FrontendOption = 'none' | 'copilotkit';
 
 // Re-export types from schema for convenience
 export type { BuildType, ModelProvider, ProtocolMode, SDKFramework, TargetLanguage };
@@ -66,6 +69,8 @@ export interface GenerateConfig {
   sessionStorageMountPath?: string;
   /** When true, create a config bundle wired into the agent template */
   withConfigBundle?: boolean;
+  /** Frontend UI to scaffold (AGUI only) */
+  frontend?: FrontendOption;
 }
 
 /** Base steps - apiKey, memory, subnets, securityGroups are conditionally added based on selections */
@@ -91,6 +96,7 @@ export const STEP_LABELS: Record<GenerateStep, string> = {
   modelProvider: 'Model',
   apiKey: 'API Key',
   memory: 'Memory',
+  frontend: 'Frontend',
   advanced: 'Advanced',
   networkMode: 'Network',
   subnets: 'Subnets',
@@ -211,4 +217,9 @@ export const MEMORY_OPTIONS = [
   { id: 'none', title: 'None', description: 'No memory' },
   { id: 'shortTerm', title: 'Short-term memory', description: 'Context within a session' },
   { id: 'longAndShortTerm', title: 'Long-term and short-term', description: 'Persists across sessions' },
+] as const;
+
+export const FRONTEND_OPTIONS = [
+  { id: 'copilotkit', title: 'Yes — CopilotKit', description: 'Chat UI with AG-UI streaming' },
+  { id: 'none', title: 'No', description: 'No frontend scaffolded' },
 ] as const;

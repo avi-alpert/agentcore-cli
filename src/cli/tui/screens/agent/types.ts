@@ -10,7 +10,7 @@ import type {
 } from '../../../../schema';
 import { DEFAULT_MODEL_IDS, getSupportedModelProviders } from '../../../../schema';
 import type { JwtConfigOptions } from '../../../primitives/auth-utils';
-import type { MemoryOption } from '../generate/types';
+import type { FrontendOption, MemoryOption } from '../generate/types';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Add Agent Flow Types
@@ -57,6 +57,7 @@ export type AddAgentStep =
   | 'maxLifetime'
   | 'sessionStorageMountPath'
   | 'memory'
+  | 'frontend'
   | 'region'
   | 'bedrockAgent'
   | 'bedrockAlias'
@@ -99,6 +100,8 @@ export interface AddAgentConfig {
   sessionStorageMountPath?: string;
   /** When true, create a config bundle wired into the agent template */
   withConfigBundle?: boolean;
+  /** Frontend UI to scaffold (AGUI only) */
+  frontend?: FrontendOption;
   /** Python version (only for Python agents) */
   pythonVersion: PythonRuntime;
   /** Memory option (create path only) */
@@ -133,6 +136,7 @@ export const ADD_AGENT_STEP_LABELS: Record<AddAgentStep, string> = {
   maxLifetime: 'Max Lifetime',
   sessionStorageMountPath: 'Session Storage',
   memory: 'Memory',
+  frontend: 'Frontend',
   region: 'Region',
   bedrockAgent: 'Agent',
   bedrockAlias: 'Alias',

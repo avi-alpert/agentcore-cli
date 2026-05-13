@@ -1,7 +1,15 @@
 import type { NetworkMode, RuntimeAuthorizerType } from '../../../../schema';
 import { ProjectNameSchema, SessionStorageSchema } from '../../../../schema';
 import type { JwtConfigOptions } from '../../../primitives/auth-utils';
-import type { AdvancedSettingId, BuildType, GenerateConfig, GenerateStep, MemoryOption, ProtocolMode } from './types';
+import type {
+  AdvancedSettingId,
+  BuildType,
+  FrontendOption,
+  GenerateConfig,
+  GenerateStep,
+  MemoryOption,
+  ProtocolMode,
+} from './types';
 import { BASE_GENERATE_STEPS, getModelProviderOptionsForSdk } from './types';
 import { useCallback, useMemo, useState } from 'react';
 
@@ -56,6 +64,10 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
       if (sdkSelected && config.sdk === 'Strands') {
         const advancedIndex = filtered.indexOf('advanced');
         filtered = [...filtered.slice(0, advancedIndex), 'memory', ...filtered.slice(advancedIndex)];
+      }
+      if (config.protocol === 'AGUI') {
+        const advancedIndex = filtered.indexOf('advanced');
+        filtered = [...filtered.slice(0, advancedIndex), 'frontend', ...filtered.slice(advancedIndex)];
       }
     }
     if (advancedSelected) {
@@ -161,16 +173,17 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
   const setModelProvider = useCallback(
     (modelProvider: GenerateConfig['modelProvider']) => {
       setConfig(c => ({ ...c, modelProvider }));
-      // Non-Bedrock providers need API key step
       if (modelProvider !== 'Bedrock') {
         setStep('apiKey');
       } else if (config.sdk === 'Strands') {
         setStep('memory');
+      } else if (config.protocol === 'AGUI') {
+        setStep('frontend');
       } else {
         setStep('advanced');
       }
     },
-    [config.sdk]
+    [config.sdk, config.protocol]
   );
 
   const setApiKey = useCallback(
@@ -178,23 +191,39 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
       setConfig(c => ({ ...c, apiKey }));
       if (config.sdk === 'Strands') {
         setStep('memory');
+      } else if (config.protocol === 'AGUI') {
+        setStep('frontend');
       } else {
         setStep('advanced');
       }
     },
-    [config.sdk]
+    [config.sdk, config.protocol]
   );
 
   const skipApiKey = useCallback(() => {
     if (config.sdk === 'Strands') {
       setStep('memory');
+    } else if (config.protocol === 'AGUI') {
+      setStep('frontend');
     } else {
       setStep('advanced');
     }
-  }, [config.sdk]);
+  }, [config.sdk, config.protocol]);
 
-  const setMemory = useCallback((memory: MemoryOption) => {
-    setConfig(c => ({ ...c, memory }));
+  const setMemory = useCallback(
+    (memory: MemoryOption) => {
+      setConfig(c => ({ ...c, memory }));
+      if (config.protocol === 'AGUI') {
+        setStep('frontend');
+      } else {
+        setStep('advanced');
+      }
+    },
+    [config.protocol]
+  );
+
+  const setFrontend = useCallback((frontend: FrontendOption) => {
+    setConfig(c => ({ ...c, frontend }));
     setStep('advanced');
   }, []);
 
@@ -411,6 +440,7 @@ export function useGenerateWizard(options?: UseGenerateWizardOptions) {
     setApiKey,
     skipApiKey,
     setMemory,
+    setFrontend,
     setAdvanced,
     advancedSelected,
     advancedSettings,

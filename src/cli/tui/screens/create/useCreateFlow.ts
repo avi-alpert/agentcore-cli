@@ -310,6 +310,7 @@ export function useCreateFlow(cwd: string): CreateFlowState {
                   maxLifetime: addAgentConfig.maxLifetime,
                   sessionStorageMountPath: addAgentConfig.sessionStorageMountPath,
                   withConfigBundle: addAgentConfig.withConfigBundle,
+                  frontend: addAgentConfig.frontend,
                 };
 
                 logger.logSubStep(`Framework: ${generateConfig.sdk}`);

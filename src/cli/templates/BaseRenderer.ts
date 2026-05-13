@@ -1,7 +1,9 @@
 import { APP_DIR } from '../../lib';
-import { copyAndRenderDir } from './render';
+import { copyAndRenderDir, copyDir } from './render';
 import type { AgentRenderConfig } from './types';
+import Handlebars from 'handlebars';
 import { existsSync } from 'node:fs';
+import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
 
 export interface RendererContext {
@@ -62,6 +64,26 @@ export abstract class BaseRenderer {
       if (existsSync(memoryCapabilityDir)) {
         const memoryTargetDir = path.join(projectDir, 'memory');
         await copyAndRenderDir(memoryCapabilityDir, memoryTargetDir, templateData);
+      }
+    }
+
+    // Render CopilotKit frontend (AGUI with frontend enabled)
+    // Uses plain copy (not Handlebars) because TSX files contain {{ in JSX syntax.
+    // Only package.json and index.html need template substitution.
+    if (this.config.hasFrontend) {
+      const frontendTemplateDir = path.join(this.baseTemplateDir, 'frontend', 'copilotkit');
+      if (existsSync(frontendTemplateDir)) {
+        const frontendTargetDir = path.join(projectDir, 'frontend');
+        await copyDir(frontendTemplateDir, frontendTargetDir);
+        // Render Handlebars in the files that need variable substitution
+        for (const file of ['package.json', 'index.html']) {
+          const filePath = path.join(frontendTargetDir, file);
+          if (existsSync(filePath)) {
+            const content = await fs.readFile(filePath, 'utf-8');
+            const rendered = Handlebars.compile(content)(templateData);
+            await fs.writeFile(filePath, rendered, 'utf-8');
+          }
+        }
       }
     }
 

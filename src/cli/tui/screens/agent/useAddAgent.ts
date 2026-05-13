@@ -140,6 +140,7 @@ function mapAddAgentConfigToGenerateConfig(config: AddAgentConfig): GenerateConf
     maxLifetime: config.maxLifetime,
     sessionStorageMountPath: config.sessionStorageMountPath,
     withConfigBundle: config.withConfigBundle,
+    frontend: config.frontend,
   };
 }
 

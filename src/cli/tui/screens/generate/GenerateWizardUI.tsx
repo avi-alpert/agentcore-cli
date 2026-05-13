@@ -22,10 +22,19 @@ import type { SelectableItem } from '../../components';
 import { JwtConfigInput, useJwtConfigFlow } from '../../components/jwt-config';
 import { useListNavigation, useMultiSelectNavigation } from '../../hooks';
 import { RUNTIME_AUTHORIZER_TYPE_OPTIONS } from '../agent/types';
-import type { AdvancedSettingId, BuildType, GenerateConfig, GenerateStep, MemoryOption, ProtocolMode } from './types';
+import type {
+  AdvancedSettingId,
+  BuildType,
+  FrontendOption,
+  GenerateConfig,
+  GenerateStep,
+  MemoryOption,
+  ProtocolMode,
+} from './types';
 import {
   ADVANCED_SETTING_OPTIONS,
   BUILD_TYPE_OPTIONS,
+  FRONTEND_OPTIONS,
   LANGUAGE_OPTIONS,
   MEMORY_OPTIONS,
   NETWORK_MODE_OPTIONS,
@@ -98,6 +107,8 @@ export function GenerateWizardUI({
         }));
       case 'memory':
         return MEMORY_OPTIONS.map(o => ({ id: o.id, title: o.title, description: o.description }));
+      case 'frontend':
+        return FRONTEND_OPTIONS.map(o => ({ id: o.id, title: o.title, description: o.description }));
       case 'networkMode':
         return NETWORK_MODE_OPTIONS.map(o => ({ id: o.id, title: o.title, description: o.description }));
       case 'authorizerType':
@@ -146,6 +157,9 @@ export function GenerateWizardUI({
         break;
       case 'memory':
         wizard.setMemory(item.id as MemoryOption);
+        break;
+      case 'frontend':
+        wizard.setFrontend(item.id as FrontendOption);
         break;
       case 'networkMode':
         wizard.setNetworkMode(item.id as NetworkMode);
@@ -575,6 +589,12 @@ function ConfirmView({ config, credentialProjectName }: { config: GenerateConfig
           <Text>
             <Text dimColor>Session Storage: </Text>
             <Text>{config.sessionStorageMountPath}</Text>
+          </Text>
+        )}
+        {config.frontend && config.frontend !== 'none' && (
+          <Text>
+            <Text dimColor>Frontend: </Text>
+            <Text color="green">CopilotKit</Text>
           </Text>
         )}
         {config.withConfigBundle && (

@@ -182,6 +182,7 @@ async function handleCreateCLI(options: CreateOptions): Promise<void> {
             maxLifetime: options.maxLifetime ? Number(options.maxLifetime) : undefined,
             sessionStorageMountPath: options.sessionStorageMountPath,
             withConfigBundle: options.withConfigBundle,
+            frontend: options.frontend as 'none' | 'copilotkit' | undefined,
             skipGit: options.skipGit,
             skipInstall: options.skipInstall,
             skipPythonSetup: options.skipPythonSetup,
@@ -250,6 +251,7 @@ export const registerCreate = (program: Command) => {
       'Absolute mount path for session filesystem storage under /mnt (e.g. /mnt/data) [non-interactive]'
     )
     .option('--with-config-bundle', 'Create a config bundle wired into the agent template [preview] [non-interactive]')
+    .option('--frontend <type>', 'Frontend UI to scaffold: copilotkit or none (AGUI only) [non-interactive]')
     .option('--output-dir <dir>', 'Output directory (default: current directory) [non-interactive]')
     .option('--skip-git', 'Skip git repository initialization [non-interactive]')
     .option('--skip-python-setup', 'Skip Python virtual environment setup [non-interactive]')
@@ -290,7 +292,7 @@ export const registerCreate = (program: Command) => {
         if (hasAnyFlag) {
           // Default language to Python (only supported option) for CLI mode
           options.language = options.language ?? 'Python';
-          await handleCreateCLI(options as CreateOptions);
+          await handleCreateCLI(options);
         } else {
           requireTTY();
           handleCreateTUI();
