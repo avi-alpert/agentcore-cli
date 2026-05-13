@@ -9,7 +9,7 @@ commands like `deploy`, `dev`, and `invoke` rely on the configuration stored her
 ## Agent Root
 
 The main entrypoint to your app is defined in `main.ts`. Using the AgentCore SDK `BedrockAgentCoreApp`, this file
-defines a Fastify-based HTTP app that streams tokens from your chosen Agent framework SDK.
+defines an HTTP server that streams tokens from your chosen Agent framework SDK.
 
 `model/load.ts` instantiates your chosen model provider.
 
@@ -24,7 +24,7 @@ defines a Fastify-based HTTP app that streams tokens from your chosen Agent fram
 
 If installation was successful, `node_modules/` is already populated with dependencies.
 
-`agentcore dev` will start a local server on 0.0.0.0:8080 using `npx tsx watch main.ts` for hot reload.
+`agentcore dev` will start a local server using `npx tsx watch main.ts` for hot reload. The port is logged to the terminal (default `8080`).
 
 In a new terminal, you can invoke that server with:
 

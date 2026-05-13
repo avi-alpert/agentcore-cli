@@ -24,7 +24,7 @@ defines an HTTP app that streams tokens using the Vercel AI SDK's `streamText` A
 
 If installation was successful, `node_modules/` is already populated with dependencies.
 
-`agentcore dev` will start a local server on 0.0.0.0:8080 using `npx tsx watch main.ts` for hot reload.
+`agentcore dev` will start a local server using `npx tsx watch main.ts` for hot reload. The port is logged to the terminal (default `8080`).
 
 In a new terminal, you can invoke that server with:
 
