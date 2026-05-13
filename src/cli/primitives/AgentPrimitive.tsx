@@ -254,7 +254,7 @@ export class AgentPrimitive extends BasePrimitive<AddAgentOptions, RemovableReso
       .option('--client-secret <secret>', 'OAuth client secret [non-interactive]')
       .option(
         '--request-header-allowlist <headers>',
-        'Comma-separated list of custom header names to allow (auto-prefixed with X-Amzn-Bedrock-AgentCore-Runtime-Custom-) [non-interactive]'
+        'Comma-separated list of header names to allow. X-prefixed names (e.g. Authorization, X-Api-Key, X-Custom-Signature) pass through unchanged; bare names without X- prefix are auto-prefixed with X-Amzn-Bedrock-AgentCore-Runtime-Custom- for backward compatibility. [non-interactive]'
       )
       .option(
         '--idle-timeout <seconds>',
