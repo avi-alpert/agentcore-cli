@@ -94,6 +94,7 @@ export const ModelProvider = z.enum(['bedrock', 'anthropic', 'openai', 'gemini']
 export const NetworkMode = z.enum(['public', 'vpc']);
 export const OutboundAuth = z.enum(['oauth', 'api-key', 'none']);
 export const PolicyEngineMode = z.enum(['log_only', 'enforce']);
+export const Frontend = z.enum(['none', 'copilotkit']);
 export const Protocol = z.enum(['http', 'mcp', 'a2a']);
 export const RefType = z.enum(['arn', 'name']);
 export const ResourceType = z.enum(['gateway', 'agent']);

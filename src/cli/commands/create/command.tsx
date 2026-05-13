@@ -14,6 +14,7 @@ import {
   AgentType,
   Build,
   Framework,
+  Frontend,
   Language,
   Memory,
   ModelProvider as ModelProviderEnum,
@@ -25,7 +26,13 @@ import { COMMAND_DESCRIPTIONS } from '../../tui/copy';
 import { requireTTY } from '../../tui/guards';
 import { CreateScreen } from '../../tui/screens/create';
 import { parseCommaSeparatedList } from '../shared/vpc-utils';
-import { type ProgressCallback, createProject, createProjectWithAgent, getDryRunInfo } from './action';
+import {
+  type CreateWithAgentOptions,
+  type ProgressCallback,
+  createProject,
+  createProjectWithAgent,
+  getDryRunInfo,
+} from './action';
 import type { CreateOptions } from './types';
 import { validateCreateOptions } from './validate';
 import type { Command } from '@commander-js/extra-typings';
@@ -123,6 +130,7 @@ async function handleCreateCLI(options: CreateOptions): Promise<void> {
     build: standardize(Build, options.build ?? 'codezip'),
     agent_type: standardize(AgentType, options.type ?? 'create'),
     network_mode: standardize(NetworkModeEnum, options.networkMode ?? 'public'),
+    frontend: standardize(Frontend, options.frontend ?? 'none'),
     has_agent: options.agent !== false,
   };
 
@@ -182,7 +190,7 @@ async function handleCreateCLI(options: CreateOptions): Promise<void> {
             maxLifetime: options.maxLifetime ? Number(options.maxLifetime) : undefined,
             sessionStorageMountPath: options.sessionStorageMountPath,
             withConfigBundle: options.withConfigBundle,
-            frontend: options.frontend as 'none' | 'copilotkit' | undefined,
+            frontend: options.frontend as CreateWithAgentOptions['frontend'],
             skipGit: options.skipGit,
             skipInstall: options.skipInstall,
             skipPythonSetup: options.skipPythonSetup,

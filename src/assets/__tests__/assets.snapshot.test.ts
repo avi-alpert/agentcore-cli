@@ -87,6 +87,15 @@ describe('Assets Directory Snapshots', () => {
     });
   });
 
+  describe('Frontend assets', () => {
+    const frontendFiles = assetFiles.filter(f => f.startsWith('frontend/'));
+
+    it.each(frontendFiles)('frontend/%s should match snapshot', file => {
+      const content = readFileContent(path.join(ASSETS_DIR, file));
+      expect(content).toMatchSnapshot();
+    });
+  });
+
   describe.skipIf(assetFiles.filter(f => f.startsWith('static/')).length === 0)('Static assets', () => {
     const staticFiles = assetFiles.filter(f => f.startsWith('static/'));
 

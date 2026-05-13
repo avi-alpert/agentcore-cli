@@ -553,6 +553,138 @@ exports[`Assets Directory Snapshots > File listing > should match the expected f
 ]
 `;
 
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/index.html should match snapshot 1`] = `
+"<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>{{ name }}</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/package.json should match snapshot 1`] = `
+"{
+  "name": "{{ name }}-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n bridge,ui -c blue,green \\"tsx watch src/bridge.ts\\" \\"vite\\"",
+    "build": "tsc && vite build"
+  },
+  "dependencies": {
+    "@copilotkit/react-core": "^1.54.0",
+    "@ag-ui/client": "^0.0.47",
+    "@copilotkit/runtime": "^1.54.0",
+    "@hono/node-server": "^1.13.7",
+    "hono": "^4.11.4",
+    "react": "^19.2.1",
+    "react-dom": "^19.2.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.1.0",
+    "@types/react-dom": "^19.1.0",
+    "@vitejs/plugin-react": "^4.2.0",
+    "concurrently": "^9.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.0.0",
+    "vite": "^6.0.0"
+  }
+}
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/src/App.tsx should match snapshot 1`] = `
+"import { CopilotChat, CopilotKitProvider } from '@copilotkit/react-core/v2';
+import '@copilotkit/react-core/v2/styles.css';
+
+export default function App() {
+  return (
+    <CopilotKitProvider runtimeUrl="http://localhost:3001/copilotkit">
+      <CopilotChat agentId="default" className="h-screen" />
+    </CopilotKitProvider>
+  );
+}
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/src/bridge.ts should match snapshot 1`] = `
+"import { HttpAgent } from '@ag-ui/client';
+import { CopilotRuntime, createCopilotEndpoint } from '@copilotkit/runtime/v2';
+import { serve } from '@hono/node-server';
+
+const AGENT_PORT = process.env.AGENT_PORT ?? '8080';
+const AGENT_URL = process.env.AGENT_URL ?? \`http://localhost:\${AGENT_PORT}/invocations\`;
+
+const agent = new HttpAgent({ url: AGENT_URL, headers: {} });
+const runtime = new CopilotRuntime({ agents: { default: agent } });
+const app = createCopilotEndpoint({ runtime, basePath: '/copilotkit' });
+
+serve({ fetch: app.fetch, port: 3001 }, () => {
+  console.log(\`CopilotKit bridge → \${AGENT_URL}\`);
+  console.log('Bridge running on http://localhost:3001/copilotkit');
+});
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/src/main.tsx should match snapshot 1`] = `
+"import App from './App';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+
+createRoot(document.getElementById('root')!).render(
+  <StrictMode>
+    <App />
+  </StrictMode>
+);
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/tsconfig.json should match snapshot 1`] = `
+"{
+  "compilerOptions": {
+    "target": "ES2020",
+    "useDefineForClassFields": true,
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "skipLibCheck": true,
+    "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "moduleDetection": "force",
+    "noEmit": true,
+    "jsx": "react-jsx",
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true
+  },
+  "include": ["src"]
+}
+"
+`;
+
+exports[`Assets Directory Snapshots > Frontend assets > frontend/frontend/copilotkit/vite.config.ts should match snapshot 1`] = `
+"import react from '@vitejs/plugin-react';
+import { defineConfig } from 'vite';
+
+export default defineConfig({
+  plugins: [react()],
+  server: {
+    port: 3000,
+    open: true,
+  },
+});
+"
+`;
+
 exports[`Assets Directory Snapshots > MCP assets > mcp/mcp/python/README.md should match snapshot 1`] = `
 "# {{ name }}
 

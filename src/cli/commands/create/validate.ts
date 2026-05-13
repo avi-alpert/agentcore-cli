@@ -24,6 +24,7 @@ export interface ValidationResult {
 }
 
 const MEMORY_OPTIONS = ['none', 'shortTerm', 'longAndShortTerm'] as const;
+const FRONTEND_OPTIONS = ['none', 'copilotkit'] as const;
 
 /** Check if a folder with the given name already exists in the directory */
 export function validateFolderNotExists(name: string, cwd: string): true | string {
@@ -201,6 +202,22 @@ export function validateCreateOptions(options: CreateOptions, cwd?: string): Val
         valid: false,
         error: `Invalid memory option: ${options.memory}. Use none, shortTerm, or longAndShortTerm`,
       };
+    }
+
+    // Validate frontend option
+    if (options.frontend) {
+      if (!FRONTEND_OPTIONS.includes(options.frontend as (typeof FRONTEND_OPTIONS)[number])) {
+        return {
+          valid: false,
+          error: `Invalid frontend option: ${options.frontend}. Use none or copilotkit`,
+        };
+      }
+      if (options.frontend !== 'none' && protocol !== 'AGUI') {
+        return {
+          valid: false,
+          error: '--frontend is only supported with AGUI protocol',
+        };
+      }
     }
   }
 

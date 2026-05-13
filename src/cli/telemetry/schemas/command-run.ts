@@ -11,6 +11,7 @@ import {
   FilterState,
   FilterType,
   Framework,
+  Frontend,
   GatewayTargetHost,
   GatewayTargetType,
   Language,
@@ -43,6 +44,7 @@ const CreateAttrs = safeSchema({
   build: Build,
   agent_type: AgentType,
   network_mode: NetworkMode,
+  frontend: Frontend,
   has_agent: z.boolean(),
 });
 
@@ -56,6 +58,7 @@ const AddAgentAttrs = safeSchema({
   network_mode: NetworkMode,
   authorizer_type: AuthorizerType,
   memory: Memory,
+  frontend: Frontend,
 });
 
 const AddMemoryAttrs = safeSchema({

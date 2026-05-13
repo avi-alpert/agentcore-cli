@@ -26,6 +26,7 @@ import {
   AuthorizerType as AuthorizerTypeEnum,
   Build,
   Framework,
+  Frontend,
   Language,
   Memory as MemoryEnum,
   ModelProvider,
@@ -170,6 +171,7 @@ export function useAddAgent() {
           network_mode: standardize(NetworkMode, config.networkMode ?? 'PUBLIC'),
           authorizer_type: standardize(AuthorizerTypeEnum, config.authorizerType ?? 'NONE'),
           memory: standardize(MemoryEnum, config.memory ?? 'none'),
+          frontend: standardize(Frontend, config.frontend ?? 'none'),
         },
         () => addAgentInner(config)
       );

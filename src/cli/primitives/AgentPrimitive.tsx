@@ -52,6 +52,7 @@ import {
   AuthorizerType,
   Build,
   Framework,
+  Frontend,
   Language,
   Memory,
   ModelProvider as ModelProviderEnum,
@@ -370,6 +371,7 @@ export class AgentPrimitive extends BasePrimitive<AddAgentOptions, RemovableReso
               network_mode: standardize(NetworkModeEnum, cliOptions.networkMode ?? 'PUBLIC'),
               authorizer_type: standardize(AuthorizerType, cliOptions.authorizerType ?? 'NONE'),
               memory: standardize(Memory, cliOptions.memory ?? 'none'),
+              frontend: standardize(Frontend, 'none'),
             };
           });
         } else {

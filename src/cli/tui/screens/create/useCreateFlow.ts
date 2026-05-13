@@ -28,6 +28,7 @@ import {
   AgentType,
   Build,
   Framework,
+  Frontend,
   Language,
   Memory as MemoryEnum,
   ModelProvider,
@@ -210,6 +211,7 @@ export function useCreateFlow(cwd: string): CreateFlowState {
       build: standardize(Build, addAgentConfig?.buildType ?? 'CodeZip'),
       agent_type: standardize(AgentType, addAgentConfig?.agentType ?? 'create'),
       network_mode: standardize(NetworkMode, addAgentConfig?.networkMode ?? 'PUBLIC'),
+      frontend: standardize(Frontend, addAgentConfig?.frontend ?? 'none'),
       has_agent: addAgentConfig !== null,
     };
 

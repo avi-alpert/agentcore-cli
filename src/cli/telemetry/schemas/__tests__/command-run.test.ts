@@ -96,6 +96,7 @@ describe('COMMAND_SCHEMAS', () => {
       build: 'codezip',
       agent_type: 'create',
       network_mode: 'public',
+      frontend: 'none',
       has_agent: true,
     };
     expect(COMMAND_SCHEMAS.create.parse(attrs)).toEqual(attrs);
@@ -182,6 +183,7 @@ describe('resilientParse', () => {
       build: 'codezip',
       agent_type: 'create',
       network_mode: 'public',
+      frontend: 'none',
       has_agent: true,
     };
     expect(resilientParse(COMMAND_SCHEMAS.create, attrs)).toEqual(attrs);
