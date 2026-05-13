@@ -2175,6 +2175,9 @@ env/
 *.swo
 *~
 
+# Frontend
+node_modules/
+
 # OS
 .DS_Store
 Thumbs.db
@@ -2386,6 +2389,9 @@ env/
 *.swp
 *.swo
 *~
+
+# Frontend
+node_modules/
 
 # OS
 .DS_Store
@@ -2729,6 +2735,9 @@ env/
 *.swp
 *.swo
 *~
+
+# Frontend
+node_modules/
 
 # OS
 .DS_Store

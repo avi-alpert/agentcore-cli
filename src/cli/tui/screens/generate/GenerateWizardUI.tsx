@@ -594,7 +594,7 @@ function ConfirmView({ config, credentialProjectName }: { config: GenerateConfig
         {config.frontend && config.frontend !== 'none' && (
           <Text>
             <Text dimColor>Frontend: </Text>
-            <Text color="green">CopilotKit</Text>
+            <Text>CopilotKit</Text>
           </Text>
         )}
         {config.withConfigBundle && (
