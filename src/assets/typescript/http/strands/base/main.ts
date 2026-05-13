@@ -21,7 +21,7 @@ const addNumbers = tool({
     },
     required: ['a', 'b'],
   },
-  handler: async ({ a, b }: { a: number; b: number }) => a + b,
+  callback: async ({ a, b }: { a: number; b: number }) => a + b,
 });
 tools.push(addNumbers);
 
