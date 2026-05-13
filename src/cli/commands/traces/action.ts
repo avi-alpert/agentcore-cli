@@ -23,6 +23,13 @@ export async function handleTracesList(
 
   const { agent } = resolved;
 
+  // Traces are only supported for Python agents
+  const runtimeSpec = context.project.runtimes.find(r => r.name === agent.agentName);
+  const isPython = runtimeSpec?.entrypoint?.endsWith('.py') || runtimeSpec?.entrypoint?.includes('.py:');
+  if (!isPython) {
+    return { success: false, error: 'Traces are only supported for Python agents. TypeScript agents do not support observability traces.' };
+  }
+
   const consoleUrl = buildTraceConsoleUrl({
     region: agent.region,
     accountId: agent.accountId,
@@ -84,6 +91,13 @@ export async function handleTracesGet(
   }
 
   const { agent } = resolved;
+
+  // Traces are only supported for Python agents
+  const runtimeSpec = context.project.runtimes.find(r => r.name === agent.agentName);
+  const isPython = runtimeSpec?.entrypoint?.endsWith('.py') || runtimeSpec?.entrypoint?.includes('.py:');
+  if (!isPython) {
+    return { success: false, error: 'Traces are only supported for Python agents. TypeScript agents do not support observability traces.' };
+  }
 
   const consoleUrl = buildTraceConsoleUrl({
     region: agent.region,
