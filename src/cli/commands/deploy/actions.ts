@@ -657,7 +657,9 @@ export async function handleDeploy(options: ValidatedDeployOptions): Promise<Dep
     // Post-deploy: Enable CloudWatch Transaction Search (non-blocking, silent)
     const nextSteps = agentNames.length > 0 ? [...AGENT_NEXT_STEPS] : [...MEMORY_ONLY_NEXT_STEPS];
     const notes: string[] = [];
-    if (agentNames.length > 0 || hasGateways) {
+    const hasPythonAgent =
+      context.projectSpec.runtimes?.some(a => a.entrypoint?.endsWith('.py') || a.entrypoint?.includes('.py:')) ?? false;
+    if ((agentNames.length > 0 || hasGateways) && hasPythonAgent) {
       try {
         const tsResult = await setupTransactionSearch({
           region: target.region,
